@@ -6,10 +6,42 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { randomUUID } from 'crypto'
+import { execFile } from 'child_process'
 import { formatTimeForFilename } from './formatTime'
+import { executablePath } from './binaries'
+// @ts-ignore
+import ffprobe from 'ffprobe-static'
 
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path
+const ffmpegPath = executablePath(require('@ffmpeg-installer/ffmpeg').path)
 ffmpeg.setFfmpegPath(ffmpegPath)
+
+function parseFps(rate: string | undefined, fallback: number): number {
+  if (!rate) return fallback
+  const [numerator, denominator] = rate.split('/').map(Number)
+  const parsed = denominator ? numerator / denominator : numerator
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+/**
+ * Projects created before the FPS fix may contain the stream's nominal rate
+ * (or a legacy 30 fps default). Probe again at export so every export follows
+ * the video file that is actually being rendered.
+ */
+function getSourceFps(videoPath: string, fallback: number): Promise<number> {
+  return new Promise((resolve) => {
+    execFile(
+      executablePath(ffprobe.path),
+      ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=avg_frame_rate,r_frame_rate', '-of', 'default=noprint_wrappers=1', videoPath],
+      (error, stdout) => {
+        if (error) return resolve(fallback)
+        const values = Object.fromEntries(
+          stdout.trim().split(/\r?\n/).map((line) => line.split('=', 2)).filter(([key, value]) => key && value)
+        )
+        resolve(parseFps(values.avg_frame_rate || values.r_frame_rate, fallback))
+      }
+    )
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Export Job Tracking for Cancellation
@@ -244,6 +276,7 @@ function muxFramesWithAudio(
   segmentStart: number,
   duration: number,
   fps: number,
+  frameCount: number,
   abortSignal: AbortSignal,
   stabilization?: { enabled: boolean; smoothing?: number; transformsFile?: string }
 ): { command: ffmpeg.FfmpegCommand; promise: Promise<void> } {
@@ -270,7 +303,11 @@ function muxFramesWithAudio(
       '-crf', '15',
       '-pix_fmt', 'yuv420p',
       ...(videoFilter ? ['-vf', videoFilter] : []),
-      '-r', String(fps),
+      // The image sequence already has one timestamp per captured source-rate
+      // frame. Do not apply a second output `-r`: FFmpeg may otherwise
+      // duplicate/drop frames while resynchronizing to the audio stream.
+      '-vsync', '0',
+      '-frames:v', String(frameCount),
       '-c:a', 'aac',
       '-b:a', '256k',
       '-movflags', '+faststart',
@@ -359,7 +396,7 @@ async function runPipeline(
 
     try {
       // --- Capture (sequential — renderer can only do one at a time) ---
-      const { frameDir, frameCount: _frameCount } = await requestPreviewCapture(
+      const { frameDir, frameCount } = await requestPreviewCapture(
         mainWindow,
         {
           videoPath: project.videoPath,
@@ -414,6 +451,7 @@ async function runPipeline(
         slice.start,
         duration,
         fps,
+        frameCount,
         abortSignal,
         project.stabilization?.enabled
           ? {
@@ -530,7 +568,7 @@ export async function exportVideo(
   const exportSlices = slices && slices.length > 0 ? slices : undefined
 
   const results: { sliceId: string; path: string }[] = []
-  const fps = project.videoFps || 30
+  const fps = await getSourceFps(project.videoPath, project.videoFps || 30)
 
   // Resolution label for filename e.g. "1214x2160"
   const resLabel = `${project.outputWidth}x${project.outputHeight}`

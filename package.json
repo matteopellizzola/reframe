@@ -49,6 +49,10 @@
   "build": {
     "appId": "com.reframe.app",
     "productName": "Reframe",
+    "asarUnpack": [
+      "node_modules/@ffmpeg-installer/**",
+      "node_modules/ffprobe-static/**"
+    ],
     "mac": {
       "target": [
         {

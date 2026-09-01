@@ -22,7 +22,7 @@ interface ExportContextType {
   isExporting: boolean
   cancelExport: () => void
   cancelSliceExport: (sliceId: string) => Promise<void>
-  startExport: (slices: any[], project: any, basePath: string, projectName: string, videoId: string) => Promise<void>
+  startExport: (slices: any[], project: any, basePath: string | null, projectName: string, videoId: string) => Promise<void>
 }
 
 const ExportContext = createContext<ExportContextType | null>(null)
@@ -57,7 +57,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  const startExport = async (slices: any[], project: any, basePath: string, projectName: string, videoId: string) => {
+  const startExport = async (slices: any[], project: any, basePath: string | null, projectName: string, videoId: string) => {
     const exportJobId = `export-${Date.now()}`
     jobIdRef.current = exportJobId
     

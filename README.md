@@ -8,6 +8,8 @@ A macOS desktop app for converting landscape videos to portrait format using a k
 
 - 🎬 **Keyframe-based editing** — Precise control over pan and zoom animations
 - 🎯 **Visual preview** — Real-time preview of your portrait video
+- 📁 **Export destination** — Choose the destination folder every time you export
+- ✍️ **Local subtitles** — Whisper downloads its runtime and model on first use; Homebrew is not required
 
 ## Prerequisites
 

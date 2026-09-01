@@ -939,8 +939,8 @@ export default function Timeline() {
     console.log('Export slice clicked:', sliceId)
     
     const slice = project.slices.find((s) => s.id === sliceId)
-    if (!slice || slice.status !== 'keep' || !basePath) {
-      console.error('Slice not found, not keep status, or no basePath:', { sliceId, slice, basePath })
+    if (!slice || slice.status !== 'keep') {
+      console.error('Slice not found or not keep status:', { sliceId, slice })
       return
     }
 

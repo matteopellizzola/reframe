@@ -9,7 +9,8 @@ import os from 'os'
 import ffprobe from 'ffprobe-static'
 // @ts-ignore
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
-import { formatTimeForFilename } from './formatTime'
+import { ensureWhisperRuntime } from './whisperRuntime'
+import { executablePath } from './binaries'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -26,40 +27,11 @@ function parseFps(rate: string | undefined): number {
 }
 
 function getFFprobePath(): string {
-  return ffprobe.path
+  return executablePath(ffprobe.path)
 }
 
 function getFfmpegPath(): string {
-  return ffmpegInstaller.path
-}
-
-const WHISPER_MODEL_NAME = 'ggml-small.bin'
-
-async function getWhisperModelPath(): Promise<string> {
-  const dataPath = await getDataPath()
-  const modelDir = path.join(path.dirname(dataPath), 'models')
-  const modelPath = path.join(modelDir, WHISPER_MODEL_NAME)
-  try {
-    await fs.promises.access(modelPath)
-    return modelPath
-  } catch {
-    throw new Error(`Modello Whisper non disponibile. Scarica ${WHISPER_MODEL_NAME} nella cartella dati di Reframe.`)
-  }
-}
-
-function getWhisperCliPath(): string {
-  const packaged = path.join(process.resourcesPath, 'whisper', 'whisper-cli')
-  const candidates = [
-    packaged,
-    process.env.REFRAME_WHISPER_CLI,
-    '/opt/homebrew/bin/whisper-cli',
-    '/usr/local/bin/whisper-cli',
-  ].filter((value): value is string => Boolean(value))
-  const executable = candidates.find((candidate) => fs.existsSync(candidate))
-  if (!executable) {
-    throw new Error('Runtime Whisper.cpp non disponibile. Reinstalla Reframe oppure installa whisper-cpp.')
-  }
-  return executable
+  return executablePath(ffmpegInstaller.path)
 }
 
 // Centralized data store in ~/.reframe/data.json
@@ -191,7 +163,10 @@ ipcMain.handle('get-video-metadata', async (_event, filePath: string) => {
           width: videoStream.width,
           height: videoStream.height,
           duration: parseFloat(data.format?.duration || videoStream.duration || '0'),
-          fps: parseFps(videoStream.r_frame_rate),
+          // `r_frame_rate` is the codec time base and can be misleading for
+          // variable-frame-rate footage. Prefer the actual average frame rate
+          // so the renderer captures and the export are paced like the source.
+          fps: parseFps(videoStream.avg_frame_rate || videoStream.r_frame_rate),
         })
       } catch (e) {
         reject(e)
@@ -208,7 +183,7 @@ ipcMain.handle('transcribe-video', async (_event, filePath: string) => {
   const outputBase = path.join(tempDir, 'transcript')
   await fs.promises.mkdir(tempDir, { recursive: true })
   try {
-    const [modelPath, cliPath] = await Promise.all([getWhisperModelPath(), Promise.resolve(getWhisperCliPath())])
+    const { modelPath, cliPath } = await ensureWhisperRuntime()
     await new Promise<void>((resolve, reject) => {
       execFile(getFfmpegPath(), ['-y', '-i', filePath, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath], {
         timeout: 10 * 60 * 1000, maxBuffer: 10 * 1024 * 1024,
@@ -241,70 +216,29 @@ ipcMain.handle('transcribe-video', async (_event, filePath: string) => {
 
 ipcMain.handle('export-video', async (_event, args) => {
   if (!mainWindow) return null
-  
-  const { basePath, projectName, videoId, slices } = args
-  
-  // If no basePath, fall back to old behavior (ask user)
-  if (!basePath) {
-    const defaultName = 'reframe-export.mp4'
-    const result = await dialog.showSaveDialog(mainWindow, {
-      defaultPath: defaultName,
-      filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
-    })
-    if (result.canceled || !result.filePath) return null
-    try {
-      const paths = await exportVideo(args, result.filePath, mainWindow)
-      return paths.join(', ')
-    } catch (err: any) {
-      throw new Error(err.message || 'Export failed')
-    }
-  }
-  
-  // Auto-generate export path: basePath/projectName/exports/
-  const sanitizeName = (name: string) => name.replace(/[^a-zA-Z0-9-_]/g, '-')
-  const projectDir = path.join(basePath, sanitizeName(projectName))
-  const exportsDir = path.join(projectDir, 'exports')
-  
+  const { basePath, videoId } = args
+  // Destination is intentionally requested for every export. The project root
+  // remains a convenient starting location, but never decides the result.
+  const destination = await dialog.showOpenDialog(mainWindow, {
+    title: 'Scegli la cartella di destinazione',
+    defaultPath: basePath || undefined,
+    properties: ['openDirectory', 'createDirectory'],
+  })
+  if (destination.canceled || destination.filePaths.length === 0) return null
   try {
-    const isQuickExport = slices && slices.length === 1
-    
-    if (isQuickExport) {
-      // Quick export: only remove matching timestamp files
-      await fs.promises.mkdir(exportsDir, { recursive: true })
-      
-      const slice = slices[0]
-      const startTime = formatTimeForFilename(slice.start)
-      const endTime = formatTimeForFilename(slice.end)
-      const timestampPattern = `${startTime}-to-${endTime}`
-      
-      // Find and remove existing files with matching timestamps
-      try {
-        await fs.promises.access(exportsDir)
-        const files = await fs.promises.readdir(exportsDir)
-        for (const file of files) {
-          if (file.includes(timestampPattern)) {
-            const filePath = path.join(exportsDir, file)
-            await fs.promises.unlink(filePath)
-          }
-        }
-      } catch {
-        // Directory doesn't exist yet
-      }
-    } else {
-      // Full export: clear entire exports directory
-      try {
-        await fs.promises.access(exportsDir)
-        await fs.promises.rm(exportsDir, { recursive: true, force: true })
-      } catch {
-        // Directory doesn't exist
-      }
-      await fs.promises.mkdir(exportsDir, { recursive: true })
+    await fs.promises.mkdir(destination.filePaths[0], { recursive: true })
+    const safeVideoId = String(videoId || 'reframe-export').replace(/[^a-zA-Z0-9-_]/g, '-')
+    // A unique base prevents a new export from deleting or overwriting files
+    // already present in a user-selected folder.
+    const existingNames = new Set(await fs.promises.readdir(destination.filePaths[0]))
+    let suffix = 0
+    let baseName = safeVideoId
+    while ([...existingNames].some((name) => name === `${baseName}.mp4` || name.startsWith(`${baseName}_`))) {
+      suffix += 1
+      baseName = `${safeVideoId}-${suffix}`
     }
-    
-    // Generate filename with timestamps
-    const baseFileName = path.join(exportsDir, sanitizeName(videoId))
-    
-    const paths = await exportVideo(args, baseFileName + '.mp4', mainWindow)
+    const baseFileName = path.join(destination.filePaths[0], baseName)
+    const paths = await exportVideo(args, `${baseFileName}.mp4`, mainWindow)
     return paths.join(', ')
   } catch (err: any) {
     throw new Error(err.message || 'Export failed')

@@ -309,7 +309,7 @@ export default function Toolbar({
   const canTrack = !!currentSlice && selectedKeyframeIds.length <= 1
 
   const handleExport = async () => {
-    if (!hasExportableSlices || !basePath) return
+    if (!hasExportableSlices) return
 
     const reframeProject = route.view === 'editor' ? getProject(route.projectId) : null
     const projectName = reframeProject?.name || 'unknown-project'
