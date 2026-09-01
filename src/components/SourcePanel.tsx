@@ -106,6 +106,7 @@ export default function SourcePanel({
   const project = useEditorStore((s) => s.project!)
   const currentTime = useEditorStore((s) => s.currentTime)
   const isPlaying = useEditorStore((s) => s.isPlaying)
+  const previewAudioEnabled = useEditorStore((s) => s.previewAudioEnabled)
   const setCurrentTime = useEditorStore((s) => s.setCurrentTime)
   const setPlaying = useEditorStore((s) => s.setPlaying)
   const addOrUpdateKeyframe = useEditorStore((s) => s.addOrUpdateKeyframe)
@@ -199,6 +200,13 @@ export default function SourcePanel({
       video.pause()
     }
   }, [isPlaying])
+
+  // Audio is only for the editor preview. Export always uses the source audio
+  // directly in the main process and is intentionally unaffected by this.
+  useEffect(() => {
+    const video = videoRef.current
+    if (video) video.muted = !previewAudioEnabled
+  }, [previewAudioEnabled])
 
   const playbackRafRef = useRef<number>(0)
   const playbackVfcRef = useRef<number>(0)
@@ -507,7 +515,7 @@ export default function SourcePanel({
         ref={videoRef}
         id="source-video"
         src={`file://${project.videoPath}`}
-        muted
+        muted={!previewAudioEnabled}
         playsInline
         preload="auto"
         onLoadedMetadata={updateVideoRendered}

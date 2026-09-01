@@ -7,6 +7,7 @@ import { useExport } from '../contexts/ExportContext'
 import type { AspectRatio, TrackingFps } from '../types'
 import TrackingSettingsModal from './TrackingSettingsModal'
 import { formatTime } from '../utils/formatTime'
+import SubtitleEditor from './SubtitleEditor'
 
 type OutputRatio = '9:16' | '4:5' | '1:1' | '16:9'
 
@@ -288,6 +289,7 @@ export default function Toolbar({
   const selectedKeyframeIds = useEditorStore((s) => s.selectedKeyframeIds)
 
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showSubtitleEditor, setShowSubtitleEditor] = useState(false)
   const navigate = useAppStore((s) => s.navigate)
   const route = useAppStore((s) => s.route)
   const basePath = useAppStore((s) => s.basePath)
@@ -333,6 +335,16 @@ export default function Toolbar({
       >
         <LeftCaretIcon size={20} />
       </IconButton>
+
+      <Divider />
+
+      <TrackButton
+        onClick={() => setShowSubtitleEditor(true)}
+        style={{ WebkitAppRegion: 'no-drag', background: 'rgba(96, 165, 250, 0.15)', color: '#93c5fd' } as any}
+        title="Genera e modifica i sottotitoli"
+      >
+        {project.subtitles?.cues.length ? `Subtitles (${project.subtitles.cues.length})` : 'Subtitles'}
+      </TrackButton>
 
       <Divider />
 
@@ -444,6 +456,8 @@ export default function Toolbar({
           onClose={() => setShowSettingsModal(false)}
         />
       )}
+
+      {showSubtitleEditor && <SubtitleEditor onClose={() => setShowSubtitleEditor(false)} />}
 
       <ExportButton
         onClick={handleExport}

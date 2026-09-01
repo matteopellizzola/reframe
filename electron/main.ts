@@ -33,6 +33,35 @@ function getFfmpegPath(): string {
   return ffmpegInstaller.path
 }
 
+const WHISPER_MODEL_NAME = 'ggml-small.bin'
+
+async function getWhisperModelPath(): Promise<string> {
+  const dataPath = await getDataPath()
+  const modelDir = path.join(path.dirname(dataPath), 'models')
+  const modelPath = path.join(modelDir, WHISPER_MODEL_NAME)
+  try {
+    await fs.promises.access(modelPath)
+    return modelPath
+  } catch {
+    throw new Error(`Modello Whisper non disponibile. Scarica ${WHISPER_MODEL_NAME} nella cartella dati di Reframe.`)
+  }
+}
+
+function getWhisperCliPath(): string {
+  const packaged = path.join(process.resourcesPath, 'whisper', 'whisper-cli')
+  const candidates = [
+    packaged,
+    process.env.REFRAME_WHISPER_CLI,
+    '/opt/homebrew/bin/whisper-cli',
+    '/usr/local/bin/whisper-cli',
+  ].filter((value): value is string => Boolean(value))
+  const executable = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!executable) {
+    throw new Error('Runtime Whisper.cpp non disponibile. Reinstalla Reframe oppure installa whisper-cpp.')
+  }
+  return executable
+}
+
 // Centralized data store in ~/.reframe/data.json
 let dataDirInitialized = false
 
@@ -169,6 +198,44 @@ ipcMain.handle('get-video-metadata', async (_event, filePath: string) => {
       }
     })
   })
+})
+
+// Local whisper.cpp transcription. Video audio is converted to the 16 kHz mono
+// WAV input expected by whisper.cpp; no audio ever leaves the Mac.
+ipcMain.handle('transcribe-video', async (_event, filePath: string) => {
+  const tempDir = path.join(os.tmpdir(), `reframe-whisper-${randomUUID()}`)
+  const wavPath = path.join(tempDir, 'audio.wav')
+  const outputBase = path.join(tempDir, 'transcript')
+  await fs.promises.mkdir(tempDir, { recursive: true })
+  try {
+    const [modelPath, cliPath] = await Promise.all([getWhisperModelPath(), Promise.resolve(getWhisperCliPath())])
+    await new Promise<void>((resolve, reject) => {
+      execFile(getFfmpegPath(), ['-y', '-i', filePath, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath], {
+        timeout: 10 * 60 * 1000, maxBuffer: 10 * 1024 * 1024,
+      }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve())
+    })
+    await new Promise<void>((resolve, reject) => {
+      // Metal is unstable with the current Homebrew runtime on some Apple Silicon
+      // configurations. CPU/Accelerate is reliable and still fully local.
+      execFile(cliPath, ['--model', modelPath, '--file', wavPath, '--output-json', '--output-file', outputBase, '--language', 'auto', '--no-prints', '--no-gpu'], {
+        timeout: 60 * 60 * 1000,
+        maxBuffer: 10 * 1024 * 1024,
+      }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve())
+    })
+    const jsonPath = `${outputBase}.json`
+    const raw = JSON.parse(await fs.promises.readFile(jsonPath, 'utf8'))
+    const cues = (raw.transcription || raw.segments || []).map((segment: any) => ({
+      id: randomUUID(),
+      start: Number(segment.offsets?.from ?? segment.start ?? 0) / (segment.offsets ? 1000 : 1),
+      end: Number(segment.offsets?.to ?? segment.end ?? 0) / (segment.offsets ? 1000 : 1),
+      text: String(segment.text || '').trim(),
+    })).filter((cue: any) => cue.text && cue.end > cue.start)
+    return { cues }
+  } catch (error: any) {
+    throw new Error(error?.message || 'Trascrizione non riuscita.')
+  } finally {
+    await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {})
+  }
 })
 
 

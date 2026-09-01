@@ -28,6 +28,10 @@ const ActionButton = styled.button<{ $size?: 'sm' | 'lg' }>`
   }
 `
 
+const AudioButton = styled(ActionButton)<{ $enabled: boolean }>`
+  color: ${({ $enabled }) => ($enabled ? '#f97316' : '#6b7280')};
+`
+
 const PlayButton = styled.button`
   width: 2.5rem;
   height: 2.5rem;
@@ -61,7 +65,9 @@ export default function Playback() {
   const project = useEditorStore((s) => s.project!)
   const currentTime = useEditorStore((s) => s.currentTime)
   const isPlaying = useEditorStore((s) => s.isPlaying)
+  const previewAudioEnabled = useEditorStore((s) => s.previewAudioEnabled)
   const setPlaying = useEditorStore((s) => s.setPlaying)
+  const setPreviewAudioEnabled = useEditorStore((s) => s.setPreviewAudioEnabled)
   const setCurrentTime = useEditorStore((s) => s.setCurrentTime)
 
   const fps = 30
@@ -107,6 +113,16 @@ export default function Playback() {
       <ActionButton onClick={() => setCurrentTime(currentTime + 5)} title="Step forward 5s (Shift+→)">
         +5s
       </ActionButton>
+
+      <AudioButton
+        $enabled={previewAudioEnabled}
+        onClick={() => setPreviewAudioEnabled(!previewAudioEnabled)}
+        title={previewAudioEnabled ? 'Disable preview audio' : 'Enable preview audio'}
+        aria-pressed={previewAudioEnabled}
+        data-testid="preview-audio-toggle"
+      >
+        {previewAudioEnabled ? 'Audio ON' : 'Audio OFF'}
+      </AudioButton>
 
       <TimeDisplay>
         <span>{formatTime(Math.max(0, relativeTime))}</span>

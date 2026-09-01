@@ -199,6 +199,20 @@ const SliceHandleInner = styled.div`
   border-radius: 9999px;
 `
 
+const SubtitleWrapper = styled.div`
+  position: absolute; top: 24px; height: 22px; z-index: 18;
+`
+const SubtitleBlock = styled.div<{ $selected: boolean }>`
+  position:absolute; inset:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
+  background:${p => p.$selected ? 'rgba(96,165,250,.55)' : 'rgba(96,165,250,.3)'};
+  border:1px solid ${p => p.$selected ? '#93c5fd' : 'rgba(147,197,253,.65)'};
+  color:#dbeafe; border-radius:3px; padding:3px 7px; font-size:10px; cursor:grab;
+`
+const SubtitleHandle = styled.div<{ $side: 'left' | 'right' }>`
+  position:absolute; ${p => p.$side === 'left' ? 'left:-3px' : 'right:-3px'}; top:0; width:7px; height:100%;
+  cursor:ew-resize; z-index:2; background:rgba(191,219,254,.7);
+`
+
 const SliceActions = styled.div`
   position: absolute;
   bottom: -32px;
@@ -363,6 +377,9 @@ export default function Timeline() {
   const updateSlice = useEditorStore((s) => s.updateSlice)
   const setSliceStatus = useEditorStore((s) => s.setSliceStatus)
   const deleteSlice = useEditorStore((s) => s.deleteSlice)
+  const selectedSubtitleId = useEditorStore((s) => s.selectedSubtitleId)
+  const selectSubtitle = useEditorStore((s) => s.selectSubtitle)
+  const updateSubtitle = useEditorStore((s) => s.updateSubtitle)
   const tracking = useEditorStore((s) => s.tracking)
   const retrackFromFrame = useEditorStore((s) => s.retrackFromFrame)
   const basePath = useAppStore((s) => s.basePath)
@@ -733,6 +750,7 @@ export default function Timeline() {
 
       // ── Slice handles and other interactive children handle themselves ────
       if (target.closest('[data-slice-handle]')) return
+      if (target.closest('[data-subtitle]')) return
       if (target.closest('[data-untracked]')) return
 
       // ── Empty area: click-to-seek  OR  drag-to-select ───────────────────
@@ -861,6 +879,33 @@ export default function Timeline() {
     },
     [xToTime, selectSlice, setCurrentTime]
   )
+
+  const handleSubtitleDrag = useCallback((e: React.MouseEvent, id: string, mode: 'move' | 'start' | 'end') => {
+    e.stopPropagation(); e.preventDefault()
+    const scroll = scrollContainerRef.current
+    if (!scroll) return
+    selectSubtitle(id)
+    const rect = scroll.getBoundingClientRect()
+    const initial = project.subtitles?.cues.find(cue => cue.id === id)
+    if (!initial) return
+    const startX = e.clientX
+    const initialStart = initial.start; const initialEnd = initial.end
+    const onMove = (move: MouseEvent) => {
+      const delta = xToTime(move.clientX - rect.left + scroll.scrollLeft) - xToTime(startX - rect.left + scroll.scrollLeft)
+      if (mode === 'move') {
+        const duration = initialEnd - initialStart
+        const start = Math.max(trim.start, Math.min(trim.end - duration, initialStart + delta))
+        updateSubtitle(id, { start, end: start + duration })
+        setCurrentTime(start)
+      } else if (mode === 'start') {
+        updateSubtitle(id, { start: Math.max(trim.start, Math.min(initialEnd - .1, initialStart + delta)) })
+      } else {
+        updateSubtitle(id, { end: Math.min(trim.end, Math.max(initialStart + .1, initialEnd + delta)) })
+      }
+    }
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+  }, [project.subtitles, selectSubtitle, updateSubtitle, xToTime, trim, setCurrentTime])
 
   const handleTrimDrag = useCallback(
     (e: React.MouseEvent, which: 'start' | 'end') => {
@@ -1032,6 +1077,16 @@ export default function Timeline() {
                   )}
                 </SliceWrapper>
               )
+            })}
+
+            {project.subtitles?.cues.map((cue) => {
+              const left = timeToX(cue.start)
+              const width = Math.max(14, timeToX(cue.end) - left)
+              return <SubtitleWrapper key={cue.id} style={{ left, width }} data-subtitle>
+                <SubtitleBlock $selected={selectedSubtitleId === cue.id} data-subtitle onMouseDown={(e) => handleSubtitleDrag(e, cue.id, 'move')} title={cue.text}>{cue.text}</SubtitleBlock>
+                <SubtitleHandle $side="left" data-subtitle onMouseDown={(e) => handleSubtitleDrag(e, cue.id, 'start')} />
+                <SubtitleHandle $side="right" data-subtitle onMouseDown={(e) => handleSubtitleDrag(e, cue.id, 'end')} />
+              </SubtitleWrapper>
             })}
 
             {tracking.untrackedRanges.map((range, i) => (

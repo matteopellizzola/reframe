@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import { v4 as uuidv4 } from 'uuid'
-import type { Keyframe, VideoEntry, TrimRange, Slice, SliceStatus, TrackResult, UntrackedRange, TrackingState, EasingType } from '../types'
+import type { Keyframe, VideoEntry, TrimRange, Slice, SliceStatus, TrackResult, UntrackedRange, TrackingState, EasingType, Subtitles, SubtitleCue, SubtitleStyle } from '../types'
 import { ramerDouglasPeucker } from '../utils/rdp'
 
 let pendingSliceUndoTimer: ReturnType<typeof setTimeout> | null = null
-let pendingSliceSnapshot: { keyframes: Keyframe[], trim: TrimRange, slices: Slice[] } | null = null
+let pendingSliceSnapshot: UndoSnapshot | null = null
 
 export type AutoEasingType = 'auto' | EasingType
 
@@ -43,14 +43,17 @@ interface UndoSnapshot {
   keyframes: Keyframe[]
   trim: TrimRange
   slices: Slice[]
+  subtitles?: Subtitles
 }
 
 interface EditorState {
   project: Project | null
   currentTime: number
   isPlaying: boolean
+  previewAudioEnabled: boolean
   selectedKeyframeIds: string[]
   selectedSliceId: string | null
+  selectedSubtitleId: string | null
   past: UndoSnapshot[]
   future: UndoSnapshot[]
   tracking: TrackingState
@@ -59,6 +62,7 @@ interface EditorState {
   loadProject: (project: Project) => void
   setCurrentTime: (t: number) => void
   setPlaying: (v: boolean) => void
+  setPreviewAudioEnabled: (enabled: boolean) => void
   selectKeyframe: (id: string | null) => void
   selectKeyframes: (ids: string[]) => void
   toggleKeyframeSelection: (id: string, isCmd: boolean, isShift: boolean) => void
@@ -80,6 +84,12 @@ interface EditorState {
   updateSlice: (id: string, patch: Partial<Slice>) => void
   setSliceStatus: (id: string, status: SliceStatus) => void
   deleteSlice: (id: string) => void
+
+  setSubtitles: (subtitles: Subtitles) => void
+  updateSubtitle: (id: string, patch: Partial<SubtitleCue>) => void
+  deleteSubtitle: (id: string) => void
+  selectSubtitle: (id: string | null) => void
+  updateSubtitleStyle: (patch: Partial<SubtitleStyle>) => void
 
   startBoxDraw: (sliceId: string) => void
   cancelTracking: () => void
@@ -107,11 +117,17 @@ function deepCopySlices(slices: Slice[]): Slice[] {
   return slices.map((s) => ({ ...s }))
 }
 
-function pushUndo(past: UndoSnapshot[], keyframes: Keyframe[], trim: TrimRange, slices: Slice[]): UndoSnapshot[] {
+const defaultSubtitleStyle: SubtitleStyle = { x: 50, y: 82, fontSize: 5.5, color: '#ffffff', shadowColor: '#000000', fontFamily: 'Arial', background: 'box', position: 'bottom' }
+function copySubtitles(subtitles?: Subtitles): Subtitles | undefined {
+  return subtitles ? { cues: subtitles.cues.map((cue) => ({ ...cue })), originalCues: subtitles.originalCues?.map((cue) => ({ ...cue })), style: { ...subtitles.style } } : undefined
+}
+
+function pushUndo(past: UndoSnapshot[], keyframes: Keyframe[], trim: TrimRange, slices: Slice[], subtitles?: Subtitles): UndoSnapshot[] {
   const snapshot: UndoSnapshot = {
     keyframes: deepCopyKeyframes(keyframes),
     trim: { ...trim },
     slices: deepCopySlices(slices),
+    subtitles: copySubtitles(subtitles),
   }
   const newPast = [...past, snapshot]
   if (newPast.length > 50) newPast.shift()
@@ -122,8 +138,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   project: null,
   currentTime: 0,
   isPlaying: false,
+  previewAudioEnabled: false,
   selectedKeyframeIds: [],
   selectedSliceId: null,
+  selectedSubtitleId: null,
   past: [],
   future: [],
   tracking: {
@@ -144,7 +162,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   loadProject: (project) => {
     // Ensure slices array exists for legacy data
-    const p = { ...project, slices: project.slices || [] }
+    const p = { ...project, slices: project.slices || [], subtitles: project.subtitles ? { ...project.subtitles, style: { ...defaultSubtitleStyle, ...project.subtitles.style } } : undefined }
     const storedPlayhead = readStoredPlayhead(p.id, p.trim.start, p.trim.end)
     set({
       project: p,
@@ -152,6 +170,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isPlaying: false,
       selectedKeyframeIds: [],
       selectedSliceId: null,
+      selectedSubtitleId: null,
       past: [],
       future: [],
     })
@@ -176,6 +195,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       writeStoredPlayhead(state.project.id, state.currentTime)
     }
   },
+
+  setPreviewAudioEnabled: (enabled) => set({ previewAudioEnabled: enabled }),
 
   selectKeyframe: (id) => set({ selectedKeyframeIds: id ? [id] : [] }),
 
@@ -218,7 +239,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { project, past } = get()
     if (!project) return
 
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const easing = kf.easing ?? 'ease-in-out'
     const existing = project.keyframes.find(
       (k) => Math.abs(k.timestamp - kf.timestamp) < 0.1
@@ -258,7 +279,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { project, past } = get()
     if (!project) return
 
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const newKeyframes = project.keyframes.map((k) =>
       k.id === id ? { ...k, ...patch } : k
     )
@@ -281,7 +302,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { project, past, selectedKeyframeIds } = get()
     if (!project) return
 
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const newKeyframes = project.keyframes.filter((k) => k.id !== id)
 
     set({
@@ -311,7 +332,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     let newTimestamp = sorted[idx].timestamp - offsetSeconds
     newTimestamp = Math.max(newTimestamp, project.trim.start, 0)
 
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const existing = project.keyframes.find(
       (k) => Math.abs(k.timestamp - newTimestamp) < 0.1
     )
@@ -353,7 +374,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!project) return
 
     const clamped = Math.max(0, Math.min(t, project.trim.end - 0.5))
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const newKeyframes = project.keyframes.filter((k) => k.timestamp >= clamped)
     const newCurrentTime = currentTime < clamped ? clamped : currentTime
 
@@ -375,7 +396,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!project) return
 
     const clamped = Math.max(project.trim.start + 0.5, Math.min(t, project.videoDuration))
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const newKeyframes = project.keyframes.filter((k) => k.timestamp <= clamped)
     const newCurrentTime = currentTime > clamped ? clamped : currentTime
 
@@ -424,7 +445,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { project, past } = get()
     if (!project) return
 
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const sliceDuration = 5
     // Default slice starts at the playhead
     let start = Math.max(project.trim.start, Math.min(atTime, project.trim.end))
@@ -465,6 +486,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         keyframes: deepCopyKeyframes(project.keyframes),
         trim: { ...project.trim },
         slices: deepCopySlices(project.slices),
+        subtitles: copySubtitles(project.subtitles),
       }
     }
 
@@ -513,7 +535,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { project, past, selectedSliceId } = get()
     if (!project) return
 
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
     const newSlices = project.slices.filter((s) => s.id !== id)
 
     set({
@@ -521,6 +543,46 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       past: newPast,
       future: [],
       selectedSliceId: selectedSliceId === id ? null : selectedSliceId,
+    })
+  },
+
+  setSubtitles: (subtitles) => {
+    const { project, past } = get()
+    if (!project) return
+    set({
+      project: { ...project, subtitles: { ...subtitles, cues: [...subtitles.cues].sort((a, b) => a.start - b.start), style: { ...defaultSubtitleStyle, ...subtitles.style } } },
+      past: pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles),
+      future: [],
+    })
+  },
+
+  updateSubtitle: (id, patch) => {
+    const { project, past } = get()
+    if (!project?.subtitles) return
+    const cues = project.subtitles.cues.map((cue) => cue.id === id ? { ...cue, ...patch } : cue)
+      .map((cue) => ({ ...cue, end: Math.max(cue.start + 0.1, cue.end) }))
+      .sort((a, b) => a.start - b.start)
+    set({ project: { ...project, subtitles: { ...project.subtitles, cues } }, past: pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles), future: [] })
+  },
+
+  deleteSubtitle: (id) => {
+    const { project, past, selectedSubtitleId } = get()
+    if (!project?.subtitles) return
+    set({
+      project: { ...project, subtitles: { ...project.subtitles, cues: project.subtitles.cues.filter((cue) => cue.id !== id) } },
+      selectedSubtitleId: selectedSubtitleId === id ? null : selectedSubtitleId,
+      past: pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles), future: [],
+    })
+  },
+
+  selectSubtitle: (id) => set({ selectedSubtitleId: id }),
+
+  updateSubtitleStyle: (patch) => {
+    const { project, past } = get()
+    if (!project?.subtitles) return
+    set({
+      project: { ...project, subtitles: { ...project.subtitles, style: { ...project.subtitles.style, ...patch } } },
+      past: pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles), future: [],
     })
   },
 
@@ -678,7 +740,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       easing: determineEasing(i),
     }))
 
-    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices)
+    const newPast = pushUndo(past, project.keyframes, project.trim, project.slices, project.subtitles)
 
     set({
       project: {
@@ -724,6 +786,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       isPlaying: false,
       selectedKeyframeIds: [],
       selectedSliceId: null,
+      selectedSubtitleId: null,
       past: [],
       future: [],
       tracking: {
@@ -751,6 +814,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       keyframes: deepCopyKeyframes(project.keyframes),
       trim: { ...project.trim },
       slices: deepCopySlices(project.slices),
+      subtitles: copySubtitles(project.subtitles),
     }
 
     set({
@@ -759,6 +823,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         keyframes: snapshot.keyframes,
         trim: snapshot.trim,
         slices: snapshot.slices,
+        subtitles: copySubtitles(snapshot.subtitles),
       },
       past: newPast,
       future: [...future, currentSnapshot],
@@ -776,6 +841,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       keyframes: deepCopyKeyframes(project.keyframes),
       trim: { ...project.trim },
       slices: deepCopySlices(project.slices),
+      subtitles: copySubtitles(project.subtitles),
     }
 
     set({
@@ -784,6 +850,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         keyframes: snapshot.keyframes,
         trim: snapshot.trim,
         slices: snapshot.slices,
+        subtitles: copySubtitles(snapshot.subtitles),
       },
       past: [...past, currentSnapshot],
       future: newFuture,

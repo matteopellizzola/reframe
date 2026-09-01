@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('electron', {
   getPathForFile: (file: File) => webUtils.getPathForFile(file),
   getVideoMetadata: (path: string) => ipcRenderer.invoke('get-video-metadata', path),
   renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('rename-file', { oldPath, newPath }),
+  transcribeVideo: (path: string) => ipcRenderer.invoke('transcribe-video', path),
 
   // Export
   exportVideo: (args: any) => ipcRenderer.invoke('export-video', args),

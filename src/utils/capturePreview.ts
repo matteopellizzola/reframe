@@ -1,6 +1,6 @@
 import { interpolateAtTime } from './interpolate'
 import { computeCrop } from './computeCrop'
-import type { Keyframe } from '../types'
+import type { Keyframe, Subtitles } from '../types'
 import CaptureWorker from './captureWorker?worker'
 
 // Bitrate scaled to output resolution:
@@ -24,6 +24,7 @@ async function handleCapture(payload: any) {
       keyframes,
       videoWidth,
       videoHeight,
+      subtitles,
       replyChannel,
       progressChannel,
     } = payload
@@ -106,7 +107,7 @@ async function handleCapture(payload: any) {
       // Send bitmap + crop params to worker for draw + JPEG encode
       const encodedPromise = waitForEncoded()
       worker.postMessage(
-        { type: 'frame', index: i, bitmap, cropX, cropY, cropW, cropH },
+        { type: 'frame', index: i, bitmap, cropX, cropY, cropW, cropH, time: frameTime, subtitles: subtitles as Subtitles | undefined },
         [bitmap]
       )
 

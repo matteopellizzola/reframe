@@ -27,6 +27,32 @@ export interface Slice {
   status: SliceStatus
 }
 
+export interface SubtitleCue {
+  id: string
+  start: number
+  end: number
+  text: string
+}
+
+export interface SubtitleStyle {
+  /** Percentage position within the rendered frame. */
+  x: number
+  y: number
+  fontSize: number
+  color: string
+  shadowColor: string
+  fontFamily: string
+  background: 'none' | 'box'
+  position: 'top' | 'center' | 'bottom' | 'custom'
+}
+
+export interface Subtitles {
+  cues: SubtitleCue[]
+  /** Immutable Whisper result used by the editor's Reset action. */
+  originalCues?: SubtitleCue[]
+  style: SubtitleStyle
+}
+
 export interface ReframeProject {
   id: string
   name: string
@@ -47,6 +73,7 @@ export interface VideoEntry {
   trim: TrimRange
   keyframes: Keyframe[]
   slices: Slice[]
+  subtitles?: Subtitles
   addedAt: number
   stabilization?: {
     enabled: boolean

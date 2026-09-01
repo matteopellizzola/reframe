@@ -18,6 +18,7 @@ interface ElectronAPI {
   selectDirectory: () => Promise<string | null>
   ensureDirectory: (path: string) => Promise<void>
   removeDirectory: (path: string) => Promise<void>
+  transcribeVideo: (path: string) => Promise<{ cues: import('./types').SubtitleCue[] }>
 }
 
 declare global {

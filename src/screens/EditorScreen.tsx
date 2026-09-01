@@ -427,13 +427,14 @@ function EditorContent() {
         keyframes: project.keyframes,
         trim: project.trim,
         slices: project.slices,
+        subtitles: project.subtitles,
         outputRatio: project.outputRatio,
         outputWidth: project.outputWidth,
         outputHeight: project.outputHeight,
       })
     }, 500)
     return () => clearTimeout(timer)
-  }, [project?.keyframes, project?.trim, project?.slices, project?.outputRatio, project?.id, updateVideo])
+  }, [project?.keyframes, project?.trim, project?.slices, project?.subtitles, project?.outputRatio, project?.id, updateVideo])
 
   if (!project) return null
 

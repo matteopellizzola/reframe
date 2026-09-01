@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import ffmpeg from 'fluent-ffmpeg'
 import { interpolateAtTime } from '../src/utils/interpolate'
-import type { Project, Slice, Keyframe } from '../src/types'
+import type { Project, Slice, Keyframe, Subtitles } from '../src/types'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -145,6 +145,7 @@ function requestPreviewCapture(
     keyframes: Keyframe[]
     videoWidth: number
     videoHeight: number
+    subtitles?: Subtitles
   },
   abortSignal: AbortSignal,
   onProgress?: (pct: number) => void
@@ -370,6 +371,7 @@ async function runPipeline(
           keyframes: activeKeyframes,
           videoWidth: project.videoWidth,
           videoHeight: project.videoHeight,
+          subtitles: project.subtitles,
         },
         abortSignal,
         (pct) => {

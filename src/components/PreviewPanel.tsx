@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useMemo } from 'react'
 import styled from 'styled-components'
 import { useEditorStore } from '../store/editorStore'
 import { interpolateAtTime } from '../utils/interpolate'
@@ -21,6 +21,7 @@ const PlayerFrame = styled.div<{ $w: number; $h: number }>`
   width: ${(p) => (p.$w ? `${p.$w}px` : '320px')};
   height: ${(p) => (p.$h ? `${p.$h}px` : '568px')};
   background: #000;
+  container-type: inline-size;
 `
 
 const CanvasEl = styled.canvas<{ $w: number; $h: number }>`
@@ -52,10 +53,22 @@ const HudBadge = styled.div`
   z-index: 10;
 `
 
+const SubtitleOverlay = styled.div<{ $x: number; $y: number; $size: number; $color: string; $shadow: string; $font: string; $boxed: boolean }>`
+  position: absolute;
+  left: ${p => p.$x}%; top: ${p => p.$y}%; transform: translate(-50%, -50%);
+  max-width: 88%; text-align: center; white-space: pre-wrap;
+  color: ${p => p.$color}; font-size: clamp(16px, ${p => p.$size}cqw, 72px); font-weight: 800; line-height: 1.15;
+  font-family: ${p => p.$font}, sans-serif; text-shadow: 0 2px 5px ${p => p.$shadow};
+  background: ${p => p.$boxed ? 'rgba(0,0,0,.72)' : 'transparent'};
+  padding: ${p => p.$boxed ? '.18em .4em' : '0'}; border-radius: .15em;
+  cursor: move; z-index: 11; user-select: none;
+`
+
 export default function PreviewPanel() {
   const project = useEditorStore((s) => s.project!)
   const currentTime = useEditorStore((s) => s.currentTime)
   const isPlaying = useEditorStore((s) => s.isPlaying)
+  const updateSubtitleStyle = useEditorStore((s) => s.updateSubtitleStyle)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -68,6 +81,7 @@ export default function PreviewPanel() {
   const drawAtTimeRef = useRef<((t: number) => void) | null>(null)
 
   const outputAspect = project.outputWidth / project.outputHeight
+  const activeCue = useMemo(() => project.subtitles?.cues.find(cue => currentTime >= cue.start && currentTime <= cue.end), [project.subtitles, currentTime])
 
   // Calculate container size using ResizeObserver on the wrapper
   useEffect(() => {
@@ -218,10 +232,33 @@ export default function PreviewPanel() {
     }
   }, [currentTime, isPlaying])
 
+  const handleSubtitleDrag = (event: React.MouseEvent) => {
+    if (!project.subtitles) return
+    event.preventDefault(); event.stopPropagation()
+    const frame = event.currentTarget.parentElement
+    if (!frame) return
+    const bounds = frame.getBoundingClientRect()
+    const onMove = (move: MouseEvent) => {
+      const x = Math.max(6, Math.min(94, ((move.clientX - bounds.left) / bounds.width) * 100))
+      const y = Math.max(6, Math.min(94, ((move.clientY - bounds.top) / bounds.height) * 100))
+      updateSubtitleStyle({ x, y, position: 'custom' })
+    }
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+  }
+
   return (
     <Wrapper ref={wrapperRef}>
       <PlayerFrame $w={containerSize.w || 320} $h={containerSize.h || 568}>
         <CanvasEl ref={canvasRef} $w={containerSize.w || 320} $h={containerSize.h || 568} />
+        {activeCue && project.subtitles && <SubtitleOverlay
+          $x={project.subtitles.style.x} $y={project.subtitles.style.y}
+          $size={project.subtitles.style.fontSize} $color={project.subtitles.style.color}
+          $shadow={project.subtitles.style.shadowColor || '#000000'}
+          $font={project.subtitles.style.fontFamily || 'Arial'}
+          $boxed={project.subtitles.style.background === 'box'} onMouseDown={handleSubtitleDrag}
+          title="Trascina per riposizionare i sottotitoli"
+        >{activeCue.text}</SubtitleOverlay>}
         {containerSize.w === 0 && <LoadingOverlay>Loading...</LoadingOverlay>}
         <HudBadge ref={hudRef}>1.0×</HudBadge>
       </PlayerFrame>
