@@ -11,6 +11,11 @@ contextBridge.exposeInMainWorld('electron', {
   getVideoMetadata: (path: string) => ipcRenderer.invoke('get-video-metadata', path),
   renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('rename-file', { oldPath, newPath }),
   transcribeVideo: (path: string) => ipcRenderer.invoke('transcribe-video', path),
+  onWhisperStatus: (cb: (status: any) => void) => {
+    const listener = (_: any, status: any) => cb(status)
+    ipcRenderer.on('whisper:status', listener)
+    return () => ipcRenderer.removeListener('whisper:status', listener)
+  },
 
   // Export
   exportVideo: (args: any) => ipcRenderer.invoke('export-video', args),

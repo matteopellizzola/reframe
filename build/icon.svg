@@ -1,0 +1,12 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Reframe: a landscape source becoming a vertical social-video frame. -->
+  <rect x="64" y="64" width="896" height="896" rx="202" fill="#0E0E0E"/>
+  <rect x="80" y="80" width="864" height="864" rx="186" stroke="#2A2A2A" stroke-width="32"/>
+  <rect x="184" y="320" width="656" height="384" rx="52" fill="#161616" stroke="#3B82F6" stroke-width="26"/>
+  <path d="M366 512H658" stroke="#3B82F6" stroke-width="18" stroke-linecap="round" opacity=".75"/>
+  <path d="M512 410V614" stroke="#3B82F6" stroke-width="18" stroke-linecap="round" opacity=".75"/>
+  <rect x="394" y="204" width="236" height="616" rx="54" fill="#161616" stroke="#F97316" stroke-width="34"/>
+  <path d="M474 406L572 512L474 618" stroke="#F97316" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="428" cy="780" r="12" fill="#F97316"/>
+  <circle cx="596" cy="780" r="12" fill="#F97316"/>
+</svg>

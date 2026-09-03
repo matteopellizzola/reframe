@@ -177,13 +177,13 @@ ipcMain.handle('get-video-metadata', async (_event, filePath: string) => {
 
 // Local whisper.cpp transcription. Video audio is converted to the 16 kHz mono
 // WAV input expected by whisper.cpp; no audio ever leaves the Mac.
-ipcMain.handle('transcribe-video', async (_event, filePath: string) => {
+ipcMain.handle('transcribe-video', async (event, filePath: string) => {
   const tempDir = path.join(os.tmpdir(), `reframe-whisper-${randomUUID()}`)
   const wavPath = path.join(tempDir, 'audio.wav')
   const outputBase = path.join(tempDir, 'transcript')
   await fs.promises.mkdir(tempDir, { recursive: true })
   try {
-    const { modelPath, cliPath } = await ensureWhisperRuntime()
+    const { modelPath, cliPath } = await ensureWhisperRuntime((status) => event.sender.send('whisper:status', status))
     await new Promise<void>((resolve, reject) => {
       execFile(getFfmpegPath(), ['-y', '-i', filePath, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath], {
         timeout: 10 * 60 * 1000, maxBuffer: 10 * 1024 * 1024,

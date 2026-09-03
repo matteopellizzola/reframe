@@ -54,6 +54,7 @@
       "node_modules/ffprobe-static/**"
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",

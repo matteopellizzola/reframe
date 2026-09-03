@@ -19,6 +19,13 @@ interface ElectronAPI {
   ensureDirectory: (path: string) => Promise<void>
   removeDirectory: (path: string) => Promise<void>
   transcribeVideo: (path: string) => Promise<{ cues: import('./types').SubtitleCue[] }>
+  onWhisperStatus: (cb: (status: WhisperStatus) => void) => () => void
+}
+
+interface WhisperStatus {
+  phase: 'checking' | 'downloading-runtime' | 'installing-runtime' | 'downloading-model' | 'ready'
+  downloadedBytes?: number
+  totalBytes?: number
 }
 
 declare global {

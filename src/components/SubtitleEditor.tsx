@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import styled from 'styled-components'
 import { useEditorStore } from '../store/editorStore'
@@ -17,8 +17,24 @@ const TextInput = styled.textarea`background:#101010; color:#e5e5e5; border:1px 
 const Label = styled.label`display:flex; flex-direction:column; gap:5px; color:#9ca3af; font-size:11px;`
 const Row = styled.div`display:flex; gap:10px; flex-wrap:wrap; align-items:end;`
 const Error = styled.div`font-size:12px; color:#fca5a5;`
+const WhisperStatus = styled.div`background:#101010; border:1px solid #2a2a2a; border-radius:7px; padding:10px 12px; color:#e5e5e5; font-size:12px; display:flex; flex-direction:column; gap:7px;`
+const ProgressTrack = styled.div`height:5px; overflow:hidden; border-radius:999px; background:#2a2a2a;`
+const ProgressFill = styled.div<{ $value?: number }>`height:100%; width:${p => p.$value == null ? '35%' : `${p.$value}%`}; background:#f97316; border-radius:inherit; transition:width .2s; ${p => p.$value == null ? 'animation: whisper-pulse 1.2s ease-in-out infinite;' : ''} @keyframes whisper-pulse { 0%,100% { transform:translateX(-70%); } 50% { transform:translateX(190%); } }`
 
 function fmt(value: number) { return value.toFixed(2) }
+
+function formatMegabytes(bytes?: number) {
+  return bytes == null ? '' : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function whisperMessage(status: WhisperStatus | null) {
+  if (!status) return 'Controllo dei componenti di Whisper…'
+  if (status.phase === 'downloading-runtime') return 'Download del motore Whisper…'
+  if (status.phase === 'installing-runtime') return 'Preparazione del motore Whisper…'
+  if (status.phase === 'downloading-model') return 'Download del modello di trascrizione…'
+  if (status.phase === 'ready') return 'Whisper è pronto. Avvio della trascrizione…'
+  return 'Controllo dei componenti di Whisper…'
+}
 
 const fontOptions = ['Arial', 'Helvetica Neue', 'Trebuchet MS', 'Georgia', 'Impact', 'Courier New']
 
@@ -45,17 +61,20 @@ export default function SubtitleEditor({ onClose }: { onClose: () => void }) {
   const updateStyle = useEditorStore(s => s.updateSubtitleStyle)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [whisperStatus, setWhisperStatus] = useState<WhisperStatus | null>(null)
   const [wordsPerBlock, setWordsPerBlock] = useState(4)
   const subtitles = project.subtitles
   const style = subtitles?.style
 
+  useEffect(() => window.electron.onWhisperStatus(setWhisperStatus), [])
+
   const transcribe = async () => {
-    setBusy(true); setError('')
+    setBusy(true); setError(''); setWhisperStatus({ phase: 'checking' })
     try {
       const result = await window.electron.transcribeVideo(project.videoPath)
       setSubtitles({ cues: regroupCues(result.cues, wordsPerBlock), originalCues: result.cues.map(cue => ({ ...cue })), style: subtitles?.style || { x: 50, y: 82, fontSize: 5.5, color: '#ffffff', shadowColor: '#000000', fontFamily: 'Arial', background: 'box', position: 'bottom' } })
     } catch (err: any) { setError(err?.message || 'Trascrizione non riuscita.') }
-    finally { setBusy(false) }
+    finally { setBusy(false); setWhisperStatus(null) }
   }
   const position = (value: SubtitleStyle['position']) => {
     if (!style) return
@@ -81,7 +100,14 @@ export default function SubtitleEditor({ onClose }: { onClose: () => void }) {
   return createPortal(<Backdrop onMouseDown={onClose}><Modal onMouseDown={e => e.stopPropagation()}>
     <Header><Title>Sottotitoli</Title><Button onClick={onClose}>Chiudi</Button></Header>
     <Content>
-      <Row><Button $primary onClick={transcribe} disabled={busy}>{busy ? 'Whisper sta trascrivendo…' : subtitles ? 'Rigenera con Whisper' : 'Genera con Whisper'}</Button><span style={{ color:'#9ca3af', fontSize:12 }}>Whisper.cpp lavora localmente sul tuo Mac.</span></Row>
+      <Row><Button $primary onClick={transcribe} disabled={busy}>{busy ? 'Whisper è al lavoro…' : subtitles ? 'Rigenera con Whisper' : 'Genera con Whisper'}</Button><span style={{ color:'#9ca3af', fontSize:12 }}>Whisper.cpp lavora localmente sul tuo Mac.</span></Row>
+      {busy && <WhisperStatus>
+        <span>{whisperMessage(whisperStatus)}</span>
+        {(whisperStatus?.phase === 'downloading-runtime' || whisperStatus?.phase === 'downloading-model') && <>
+          <ProgressTrack><ProgressFill $value={whisperStatus.totalBytes ? Math.min(100, whisperStatus.downloadedBytes! / whisperStatus.totalBytes * 100) : undefined} /></ProgressTrack>
+          <span style={{ color:'#9ca3af', fontSize:11 }}>{whisperStatus.totalBytes ? `${formatMegabytes(whisperStatus.downloadedBytes)} di ${formatMegabytes(whisperStatus.totalBytes)}` : `${formatMegabytes(whisperStatus.downloadedBytes)} scaricati`}</span>
+        </>}
+      </WhisperStatus>}
       {error && <Error>{error}</Error>}
       {subtitles && <Row>
         <Button onClick={capitalizeAll}>Capitalizza</Button>
