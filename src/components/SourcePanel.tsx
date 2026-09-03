@@ -100,8 +100,10 @@ const SnapLine = styled.div<{ $left: number; $top: number; $height: number }>`
 
 export default function SourcePanel({
   onTrackingBoxDrawn,
+  subtitleOnly = false,
 }: {
   onTrackingBoxDrawn?: (bbox: { x: number; y: number; w: number; h: number }) => void
+  subtitleOnly?: boolean
 }) {
   const project = useEditorStore((s) => s.project!)
   const currentTime = useEditorStore((s) => s.currentTime)
@@ -510,7 +512,7 @@ export default function SourcePanel({
   )
 
   return (
-    <Container ref={containerRef} onWheel={handleWheel}>
+    <Container ref={containerRef} onWheel={subtitleOnly ? undefined : handleWheel}>
       <VideoEl
         ref={videoRef}
         id="source-video"
@@ -521,7 +523,7 @@ export default function SourcePanel({
         onLoadedMetadata={updateVideoRendered}
       />
 
-      <CropOverlay
+      {!subtitleOnly && <CropOverlay
         $left={finalCropX}
         $top={finalCropY}
         $width={cropRenderW}
@@ -531,9 +533,9 @@ export default function SourcePanel({
         $isResizing={isResizing}
         $disableTransition={disableTransition}
         onMouseDown={handleMouseDown}
-      />
+      />}
 
-      {[
+      {!subtitleOnly && [
         { key: 'tl', left: finalCropX - 6, top: finalCropY - 6, cursor: 'nw-resize' },
         { key: 'tr', left: finalCropX + cropRenderW - 6, top: finalCropY - 6, cursor: 'ne-resize' },
         { key: 'bl', left: finalCropX - 6, top: finalCropY + cropRenderH - 6, cursor: 'sw-resize' },
@@ -548,7 +550,7 @@ export default function SourcePanel({
         />
       ))}
 
-      <DimLayer $x={videoRendered.x} $y={videoRendered.y} $width={videoRendered.w} $height={videoRendered.h}>
+      {!subtitleOnly && <DimLayer $x={videoRendered.x} $y={videoRendered.y} $width={videoRendered.w} $height={videoRendered.h}>
         <DimPart $left={0} $top={0} $width="100%" $height={Math.max(0, finalCropY - videoRendered.y)} />
         <DimPart
           $left={0}
@@ -568,23 +570,23 @@ export default function SourcePanel({
           $width={Math.max(0, videoRendered.x + videoRendered.w - finalCropX - cropRenderW)}
           $height={cropRenderH}
         />
-      </DimLayer>
+      </DimLayer>}
 
-      {showSnaps.left && (
+      {!subtitleOnly && showSnaps.left && (
         <SnapLine $left={snapPositions.left} $top={videoRendered.y} $height={videoRendered.h} />
       )}
-      {showSnaps.center && (
+      {!subtitleOnly && showSnaps.center && (
         <SnapLine
           $left={snapPositions.center + cropRenderW / 2}
           $top={videoRendered.y}
           $height={videoRendered.h}
         />
       )}
-      {showSnaps.right && (
+      {!subtitleOnly && showSnaps.right && (
         <SnapLine $left={snapPositions.right + cropRenderW} $top={videoRendered.y} $height={videoRendered.h} />
       )}
 
-      {tracking.drawingBox && (
+      {!subtitleOnly && tracking.drawingBox && (
         <TrackingOverlay
           videoRendered={videoRendered}
           videoWidth={project.videoWidth}
@@ -594,7 +596,7 @@ export default function SourcePanel({
         />
       )}
 
-      {tracking.active && <TrackingProgress />}
+      {!subtitleOnly && tracking.active && <TrackingProgress />}
     </Container>
   )
 }

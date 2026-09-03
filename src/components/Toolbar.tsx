@@ -270,9 +270,11 @@ const SettingsButton = styled.button`
 export default function Toolbar({
   trackingFps,
   onTrackingFpsChange,
+  subtitleOnly = false,
 }: {
   trackingFps: TrackingFps
   onTrackingFpsChange: (fps: TrackingFps) => void
+  subtitleOnly?: boolean
 }) {
   const project = useEditorStore((s) => s.project!)
   const past = useEditorStore((s) => s.past)
@@ -297,7 +299,9 @@ export default function Toolbar({
   const { startExport } = useExport()
 
   const exportableSlices = (project.slices || []).filter((s) => s.status === 'keep')
-  const hasExportableSlices = exportableSlices.length > 0
+  const fullVideoSlice = { id: 'full-trim', start: project.trim.start, end: project.trim.end, status: 'keep' as const }
+  const slicesToExport = subtitleOnly ? [fullVideoSlice] : exportableSlices
+  const hasExportableSlices = slicesToExport.length > 0
 
   const getCurrentSlice = () => {
     const currentTime = useEditorStore.getState().currentTime
@@ -314,7 +318,7 @@ export default function Toolbar({
     const reframeProject = route.view === 'editor' ? getProject(route.projectId) : null
     const projectName = reframeProject?.name || 'unknown-project'
 
-    await startExport(exportableSlices, project, basePath, projectName, project.id)
+    await startExport(slicesToExport, project, basePath, projectName, project.id)
   }
 
   return (
@@ -338,6 +342,8 @@ export default function Toolbar({
 
       <Divider />
 
+      {subtitleOnly && <TrimText style={{ WebkitAppRegion: 'no-drag' } as any}>Sottotitoli · formato originale</TrimText>}
+
       <TrackButton
         onClick={() => setShowSubtitleEditor(true)}
         style={{ WebkitAppRegion: 'no-drag', background: 'rgba(96, 165, 250, 0.15)', color: '#93c5fd' } as any}
@@ -348,7 +354,7 @@ export default function Toolbar({
 
       <Divider />
 
-      <RatioGroup style={{ WebkitAppRegion: 'no-drag' } as any}>
+      {!subtitleOnly && <RatioGroup style={{ WebkitAppRegion: 'no-drag' } as any}>
         {ratioOptions.map((opt) => (
           <RatioButton
             key={opt.value}
@@ -365,11 +371,11 @@ export default function Toolbar({
             {opt.label}
           </RatioButton>
         ))}
-      </RatioGroup>
+      </RatioGroup>}
 
-      <Divider />
+      {!subtitleOnly && <Divider />}
 
-      <StabilizationToggle
+      {!subtitleOnly && <StabilizationToggle
         $active={project.stabilization?.enabled ?? false}
         onClick={() => {
           const currentEnabled = project.stabilization?.enabled ?? false
@@ -379,13 +385,13 @@ export default function Toolbar({
         title="Toggle video stabilization"
       >
         Stabilize
-      </StabilizationToggle>
+      </StabilizationToggle>}
 
-      <Divider />
+      {!subtitleOnly && <Divider />}
 
-      <TrimText style={{ WebkitAppRegion: 'no-drag' } as any}>
+      {!subtitleOnly && <TrimText style={{ WebkitAppRegion: 'no-drag' } as any}>
         {formatTime(project.trim.start)} – {formatTime(project.trim.end)}
-      </TrimText>
+      </TrimText>}
 
       <Spacer />
 
@@ -400,7 +406,7 @@ export default function Toolbar({
 
       <Divider />
 
-      {!tracking.active && !tracking.drawingBox && tracking.results.length === 0 && (
+      {!subtitleOnly && !tracking.active && !tracking.drawingBox && tracking.results.length === 0 && (
         <>
           <TrackButton
             onClick={() => {
@@ -467,7 +473,9 @@ export default function Toolbar({
         data-testid="export-button"
       >
         {hasExportableSlices
-          ? `Export ${exportableSlices.length} Slice${exportableSlices.length !== 1 ? 's' : ''}`
+          ? subtitleOnly
+            ? 'Esporta video'
+            : `Export ${exportableSlices.length} Slice${exportableSlices.length !== 1 ? 's' : ''}`
           : 'Export'}
       </ExportButton>
     </Bar>

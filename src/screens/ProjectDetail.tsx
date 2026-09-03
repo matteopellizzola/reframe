@@ -71,6 +71,15 @@ const AddButton = styled.button<{ $disabled: boolean }>`
   }
 `
 
+const SubtitleButton = styled(AddButton)`
+  background: rgba(96, 165, 250, 0.16);
+  color: #bfdbfe;
+
+  &:hover {
+    background: ${(p) => (p.$disabled ? 'rgba(96, 165, 250, 0.16)' : 'rgba(96, 165, 250, 0.26)')};
+  }
+`
+
 const Content = styled.div`
   flex: 1;
   display: flex;
@@ -603,24 +612,29 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
   }, [videos])
 
   const processFile = useCallback(
-    async (filePath: string) => {
+    async (filePath: string, editMode: 'reframe' | 'subtitles' = 'reframe') => {
       setLoading(true)
       setError(null)
       try {
         const meta = await window.electron.getVideoMetadata(filePath)
-        const outputRatio: '9:16' | '4:5' | '1:1' = '9:16'
-        const { outputWidth, outputHeight } = computeOutputDimensions(
-          meta.width,
-          meta.height,
-          outputRatio
-        )
+        // Phones often store portrait video as a landscape frame plus a 90°
+        // rotation tag. The subtitle flow must preserve what the user sees,
+        // not the encoded frame orientation.
+        const sourceIsRotated = meta.rotation === 90 || meta.rotation === 270
+        const sourceWidth = sourceIsRotated ? meta.height : meta.width
+        const sourceHeight = sourceIsRotated ? meta.width : meta.height
+        const outputRatio = editMode === 'subtitles' ? 'custom' as const : '9:16' as const
+        const { outputWidth, outputHeight } = editMode === 'subtitles'
+          ? { outputWidth: sourceWidth, outputHeight: sourceHeight }
+          : computeOutputDimensions(meta.width, meta.height, outputRatio)
 
         const videoId = addVideo(projectId, {
           videoPath: filePath,
           videoDuration: meta.duration,
-          videoWidth: meta.width,
-          videoHeight: meta.height,
+          videoWidth: editMode === 'subtitles' ? sourceWidth : meta.width,
+          videoHeight: editMode === 'subtitles' ? sourceHeight : meta.height,
           videoFps: meta.fps,
+          sourceRotation: meta.rotation,
           outputRatio,
           outputWidth,
           outputHeight,
@@ -636,6 +650,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
             },
           ],
           slices: [],
+          editMode,
         })
         const video = useAppStore.getState().getVideo(videoId)
         if (video) {
@@ -693,6 +708,11 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
   const handleOpenFile = useCallback(async () => {
     const filePath = await window.electron.openFile()
     if (filePath) processFile(filePath)
+  }, [processFile])
+
+  const handleOpenSubtitleFile = useCallback(async () => {
+    const filePath = await window.electron.openFile()
+    if (filePath) processFile(filePath, 'subtitles')
   }, [processFile])
 
   const handleSelectVideo = useCallback((videoId: string | null) => {
@@ -828,6 +848,15 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
         >
           {loading ? 'Reading...' : '+ Add Video'}
         </AddButton>
+        <SubtitleButton
+          onClick={handleOpenSubtitleFile}
+          disabled={loading}
+          $disabled={loading}
+          style={{ WebkitAppRegion: 'no-drag' } as any}
+          title="Importa senza reframe, per preparare soltanto i sottotitoli"
+        >
+          + Sottotitoli
+        </SubtitleButton>
       </Header>
 
       <Content>
@@ -887,7 +916,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
                     <VideoInfo>
                       <VideoName>{fileName}</VideoName>
                       <VideoMeta>
-                        {v.videoWidth}x{v.videoHeight} &middot; {Math.round(v.videoDuration)}s &middot; {v.outputRatio}
+                        {v.videoWidth}x{v.videoHeight} &middot; {Math.round(v.videoDuration)}s &middot; {v.editMode === 'subtitles' ? 'Sottotitoli' : v.outputRatio}
                       </VideoMeta>
                     </VideoInfo>
                   </VideoButton>
@@ -948,8 +977,8 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
                     <DetailValue>{selectedVideo.videoFps}</DetailValue>
                   </DetailRow>
                   <DetailRow>
-                    <DetailLabel>Output Ratio</DetailLabel>
-                    <DetailValue>{selectedVideo.outputRatio}</DetailValue>
+                    <DetailLabel>Modalità</DetailLabel>
+                    <DetailValue>{selectedVideo.editMode === 'subtitles' ? 'Sottotitoli · formato originale' : `Reframe · ${selectedVideo.outputRatio}`}</DetailValue>
                   </DetailRow>
                   <DetailRow>
                     <DetailLabel>Keyframes</DetailLabel>
@@ -962,7 +991,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
                 </DetailsSection>
 
                 <EditButton onClick={() => handleDoubleClickVideo(selectedVideo.id)}>
-                  Open in Editor
+                  {selectedVideo.editMode === 'subtitles' ? 'Apri sottotitoli' : 'Apri editor'}
                 </EditButton>
               </>
             ) : (

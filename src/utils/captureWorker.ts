@@ -68,14 +68,37 @@ self.onmessage = async (e: MessageEvent) => {
       }
 
       try {
-        const { index, bitmap, cropX, cropY, cropW, cropH, time, subtitles } = msg
+        const { index, bitmap, cropX, cropY, cropW, cropH, time, subtitles, preserveSourceFrame, sourceRotation } = msg
+        // Chromium exposes a phone video's display size through the <video>
+        // element but ImageBitmap can still contain its encoded (unrotated)
+        // pixels. For the native subtitle flow, always use the bitmap's actual
+        // bounds: there is intentionally no crop at all.
+        const sourceX = preserveSourceFrame ? 0 : cropX
+        const sourceY = preserveSourceFrame ? 0 : cropY
+        const sourceW = preserveSourceFrame ? bitmap.width : cropW
+        const sourceH = preserveSourceFrame ? bitmap.height : cropH
 
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.drawImage(
-          bitmap,
-          cropX, cropY, cropW, cropH,
-          0, 0, canvas.width, canvas.height
-        )
+        const rotation = Number(sourceRotation) || 0
+        const sourceIsTransposed = Math.abs((bitmap.width / bitmap.height) - (canvas.height / canvas.width)) < 0.01
+        if (preserveSourceFrame && (rotation === 90 || rotation === 270) && sourceIsTransposed) {
+          // Rotate onto a canvas with the exact swapped dimensions first.
+          // Applying the rotation directly to the output canvas can clip a
+          // phone video's encoded frame in Chromium, leaving a black band.
+          const rotatedCanvas = new OffscreenCanvas(bitmap.height, bitmap.width)
+          const rotatedCtx = rotatedCanvas.getContext('2d')!
+          if (rotation === 270) {
+            rotatedCtx.translate(rotatedCanvas.width, 0)
+            rotatedCtx.rotate(Math.PI / 2)
+          } else {
+            rotatedCtx.translate(0, rotatedCanvas.height)
+            rotatedCtx.rotate(-Math.PI / 2)
+          }
+          rotatedCtx.drawImage(bitmap, 0, 0)
+          ctx.drawImage(rotatedCanvas, 0, 0, canvas.width, canvas.height)
+        } else {
+          ctx.drawImage(bitmap, sourceX, sourceY, sourceW, sourceH, 0, 0, canvas.width, canvas.height)
+        }
         drawSubtitle(subtitles, time)
 
         // Release the bitmap now that we've drawn it

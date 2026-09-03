@@ -64,7 +64,7 @@ const SubtitleOverlay = styled.div<{ $x: number; $y: number; $size: number; $col
   cursor: move; z-index: 11; user-select: none;
 `
 
-export default function PreviewPanel() {
+export default function PreviewPanel({ subtitleOnly = false }: { subtitleOnly?: boolean }) {
   const project = useEditorStore((s) => s.project!)
   const currentTime = useEditorStore((s) => s.currentTime)
   const isPlaying = useEditorStore((s) => s.isPlaying)
@@ -167,20 +167,15 @@ export default function PreviewPanel() {
 
       const { videoWidth, videoHeight } = state.project
       const interp = interpolateAtTime(state.project.keyframes, t)
-
-      const { cropX, cropY, cropW, cropH } = computeCrop(
-        interp,
-        videoWidth,
-        videoHeight,
-        state.project.outputWidth,
-        state.project.outputHeight
-      )
+      const { cropX, cropY, cropW, cropH } = subtitleOnly
+        ? { cropX: 0, cropY: 0, cropW: videoWidth, cropH: videoHeight }
+        : computeCrop(interp, videoWidth, videoHeight, state.project.outputWidth, state.project.outputHeight)
 
       ctx.clearRect(0, 0, sz.w, sz.h)
       ctx.drawImage(source, cropX, cropY, cropW, cropH, 0, 0, sz.w, sz.h)
 
       if (hudRef.current) {
-        hudRef.current.textContent = `${interp.scale.toFixed(1)}×`
+        hudRef.current.textContent = subtitleOnly ? 'Originale' : `${interp.scale.toFixed(1)}×`
       }
     }
 
@@ -223,7 +218,7 @@ export default function PreviewPanel() {
         (source as any).cancelVideoFrameCallback(vfcRef.current)
       }
     }
-  }, [project.videoPath])
+  }, [project.videoPath, subtitleOnly])
 
   // Redraw when currentTime changes while paused
   useEffect(() => {

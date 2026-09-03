@@ -8,6 +8,7 @@ interface ElectronAPI {
     height: number
     duration: number
     fps: number
+    rotation: number
   }>
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; newPath: string }>
   exportVideo: (args: any) => Promise<string | null>

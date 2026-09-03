@@ -234,6 +234,7 @@ function EditorContent() {
 
   const cancelTrackerRef = useRef<(() => void) | null>(null)
   const [trackingFps, setTrackingFps] = useState<TrackingFps>(15)
+  const subtitleOnly = project?.editMode === 'subtitles'
 
   const handleTrackingBoxDrawn = useCallback(
     (bbox: { x: number; y: number; w: number; h: number }) => {
@@ -328,6 +329,7 @@ function EditorContent() {
       }
 
       if (e.code === 'KeyK') {
+        if (subtitleOnly) return
         const currentTime = useEditorStore.getState().currentTime
         const interp = interpolateAtTime(project.keyframes, currentTime)
         addOrUpdateKeyframe({
@@ -341,6 +343,7 @@ function EditorContent() {
       }
 
       if (e.code === 'KeyS' && !e.metaKey && !e.ctrlKey) {
+        if (subtitleOnly) return
         const currentTime = useEditorStore.getState().currentTime
         addSlice(currentTime)
         return
@@ -359,6 +362,7 @@ function EditorContent() {
       }
 
       if (e.code === 'KeyC' && !e.metaKey && !e.ctrlKey) {
+        if (subtitleOnly) return
         // Only clone if single keyframe selected
         if (selectedKeyframeIds.length === 1) {
           cloneKeyframeMinus(selectedKeyframeIds[0])
@@ -411,6 +415,7 @@ function EditorContent() {
       deleteSlice,
       undo,
       redo,
+      subtitleOnly,
     ]
   )
 
@@ -440,13 +445,13 @@ function EditorContent() {
 
   return (
     <Container>
-      <Toolbar trackingFps={trackingFps} onTrackingFpsChange={setTrackingFps} />
+      <Toolbar trackingFps={trackingFps} onTrackingFpsChange={setTrackingFps} subtitleOnly={subtitleOnly} />
       <MainContent>
         <SourceContainer>
-          <SourcePanel onTrackingBoxDrawn={handleTrackingBoxDrawn} />
+          <SourcePanel onTrackingBoxDrawn={handleTrackingBoxDrawn} subtitleOnly={subtitleOnly} />
         </SourceContainer>
         <PreviewContainer>
-          <PreviewPanel />
+          <PreviewPanel subtitleOnly={subtitleOnly} />
         </PreviewContainer>
       </MainContent>
       <TimelineContainer>

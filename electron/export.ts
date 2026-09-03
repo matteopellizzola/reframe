@@ -178,6 +178,8 @@ function requestPreviewCapture(
     videoWidth: number
     videoHeight: number
     subtitles?: Subtitles
+    preserveSourceFrame?: boolean
+    sourceRotation?: number
   },
   abortSignal: AbortSignal,
   onProgress?: (pct: number) => void
@@ -331,6 +333,56 @@ function muxFramesWithAudio(
   return { command, promise }
 }
 
+/**
+ * Chromium reports an iPhone video's display dimensions correctly but exposes
+ * unrotated ImageBitmap pixels to OffscreenCanvas. Normalize those sources
+ * with FFmpeg before frame capture so subtitle-only exports always operate on
+ * a physically upright frame.
+ */
+function normalizeSourceOrientation(
+  sourceVideoPath: string,
+  outputVideoPath: string,
+  rotation: number,
+  abortSignal: AbortSignal
+): Promise<void> {
+  // FFprobe reports the display matrix direction. For the common iPhone
+  // `rotation: -90` case (normalized to 270), the encoded landscape frame
+  // must be rotated clockwise to match the player's portrait display.
+  const filter = rotation === 270 ? 'transpose=1' : 'transpose=2'
+  return new Promise((resolve, reject) => {
+    const command = ffmpeg()
+      .input(sourceVideoPath)
+      .inputOptions(['-noautorotate'])
+      .videoFilters(filter)
+      .noAudio()
+      .outputOptions([
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '15',
+        '-pix_fmt', 'yuv420p',
+        // The transformed pixels are already upright. Do not copy the source
+        // display matrix, otherwise Chromium rotates them a second time.
+        '-map_metadata', '-1',
+        '-metadata:s:v:0', 'rotate=0',
+        '-movflags', '+faststart',
+      ])
+      .output(outputVideoPath)
+
+    const cancel = () => command.kill('SIGKILL')
+    abortSignal.addEventListener('abort', cancel, { once: true })
+    command
+      .on('end', () => {
+        abortSignal.removeEventListener('abort', cancel)
+        resolve()
+      })
+      .on('error', (error: Error) => {
+        abortSignal.removeEventListener('abort', cancel)
+        reject(abortSignal.aborted ? new Error('Export cancelled') : error)
+      })
+      .run()
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Pipeline
 //
@@ -395,11 +447,21 @@ async function runPipeline(
     sendSliceProgress(mainWindow, { sliceId: slice.id, progress: 0, state: 'progress' })
 
     try {
+      let captureVideoPath = project.videoPath
+      const sourceRotation = project.sourceRotation ?? 0
+      if (project.editMode === 'subtitles' && (sourceRotation === 90 || sourceRotation === 270)) {
+        // Matroska does not carry over the source MP4 display matrix after
+        // rotation, unlike MP4 where Chromium can apply the old orientation
+        // a second time to an otherwise upright frame.
+        captureVideoPath = path.join(tempDir, 'upright-source.mkv')
+        await normalizeSourceOrientation(project.videoPath, captureVideoPath, sourceRotation, abortSignal)
+      }
+
       // --- Capture (sequential — renderer can only do one at a time) ---
       const { frameDir, frameCount } = await requestPreviewCapture(
         mainWindow,
         {
-          videoPath: project.videoPath,
+          videoPath: captureVideoPath,
           start: slice.start,
           end: slice.end,
           fps,
@@ -409,6 +471,8 @@ async function runPipeline(
           videoWidth: project.videoWidth,
           videoHeight: project.videoHeight,
           subtitles: project.subtitles,
+          preserveSourceFrame: project.editMode === 'subtitles',
+          sourceRotation: captureVideoPath === project.videoPath ? project.sourceRotation : 0,
         },
         abortSignal,
         (pct) => {

@@ -67,6 +67,8 @@ export interface VideoEntry {
   videoWidth: number
   videoHeight: number
   videoFps: number
+  /** Display rotation reported by the source container (mainly phone videos). */
+  sourceRotation?: number
   outputRatio: AspectRatio
   outputWidth: number
   outputHeight: number
@@ -79,6 +81,8 @@ export interface VideoEntry {
     enabled: boolean
     smoothing?: number
   }
+  /** The subtitle flow preserves the source frame and hides reframe tools. */
+  editMode?: 'reframe' | 'subtitles'
 }
 
 export interface AppData {

@@ -25,6 +25,8 @@ async function handleCapture(payload: any) {
       videoWidth,
       videoHeight,
       subtitles,
+      preserveSourceFrame,
+      sourceRotation,
       replyChannel,
       progressChannel,
     } = payload
@@ -97,9 +99,9 @@ async function handleCapture(payload: any) {
       const frameTime = video.currentTime
 
       const interp = interpolateAtTime(keyframes as Keyframe[], frameTime)
-      const { cropW, cropH, cropX, cropY } = computeCrop(
-        interp, vidW, vidH, outputWidth, outputHeight
-      )
+      const { cropW, cropH, cropX, cropY } = preserveSourceFrame
+        ? { cropX: 0, cropY: 0, cropW: vidW, cropH: vidH }
+        : computeCrop(interp, vidW, vidH, outputWidth, outputHeight)
 
       // Create a transferable ImageBitmap from the video frame (lightweight on main thread)
       const bitmap = await createImageBitmap(video)
@@ -107,7 +109,7 @@ async function handleCapture(payload: any) {
       // Send bitmap + crop params to worker for draw + JPEG encode
       const encodedPromise = waitForEncoded()
       worker.postMessage(
-        { type: 'frame', index: i, bitmap, cropX, cropY, cropW, cropH, time: frameTime, subtitles: subtitles as Subtitles | undefined },
+        { type: 'frame', index: i, bitmap, cropX, cropY, cropW, cropH, time: frameTime, subtitles: subtitles as Subtitles | undefined, preserveSourceFrame, sourceRotation },
         [bitmap]
       )
 

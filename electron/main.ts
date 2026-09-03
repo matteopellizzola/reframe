@@ -34,6 +34,15 @@ function getFfmpegPath(): string {
   return executablePath(ffmpegInstaller.path)
 }
 
+function getVideoRotation(videoStream: any): number {
+  const rawRotation = videoStream.side_data_list?.find((item: any) => typeof item.rotation === 'number')?.rotation
+    ?? videoStream.tags?.rotate
+  const rotation = Number(rawRotation)
+  if (!Number.isFinite(rotation)) return 0
+  const normalized = ((Math.round(rotation) % 360) + 360) % 360
+  return normalized === 90 || normalized === 180 || normalized === 270 ? normalized : 0
+}
+
 // Centralized data store in ~/.reframe/data.json
 let dataDirInitialized = false
 
@@ -137,7 +146,7 @@ ipcMain.handle('open-file', async () => {
   return result.filePaths[0]
 })
 
-ipcMain.handle('get-video-metadata', async (_event, filePath: string) => {
+function getVideoMetadata(filePath: string): Promise<{ width: number; height: number; duration: number; fps: number; rotation: number }> {
   return new Promise((resolve, reject) => {
     const ffprobePath = getFFprobePath()
     const args = [
@@ -167,13 +176,16 @@ ipcMain.handle('get-video-metadata', async (_event, filePath: string) => {
           // variable-frame-rate footage. Prefer the actual average frame rate
           // so the renderer captures and the export are paced like the source.
           fps: parseFps(videoStream.avg_frame_rate || videoStream.r_frame_rate),
+          rotation: getVideoRotation(videoStream),
         })
       } catch (e) {
         reject(e)
       }
     })
   })
-})
+}
+
+ipcMain.handle('get-video-metadata', async (_event, filePath: string) => getVideoMetadata(filePath))
 
 // Local whisper.cpp transcription. Video audio is converted to the 16 kHz mono
 // WAV input expected by whisper.cpp; no audio ever leaves the Mac.
@@ -226,6 +238,25 @@ ipcMain.handle('export-video', async (_event, args) => {
   })
   if (destination.canceled || destination.filePaths.length === 0) return null
   try {
+    // Re-probe subtitle-only exports so projects created before rotation support
+    // also preserve the displayed (rather than encoded) phone-video orientation.
+    if (args?.project?.editMode === 'subtitles') {
+      const metadata = await getVideoMetadata(args.project.videoPath)
+      const rotated = metadata.rotation === 90 || metadata.rotation === 270
+      const width = rotated ? metadata.height : metadata.width
+      const height = rotated ? metadata.width : metadata.height
+      args = {
+        ...args,
+        project: {
+          ...args.project,
+          videoWidth: width,
+          videoHeight: height,
+          outputWidth: width,
+          outputHeight: height,
+          sourceRotation: metadata.rotation,
+        },
+      }
+    }
     await fs.promises.mkdir(destination.filePaths[0], { recursive: true })
     const safeVideoId = String(videoId || 'reframe-export').replace(/[^a-zA-Z0-9-_]/g, '-')
     // A unique base prevents a new export from deleting or overwriting files
