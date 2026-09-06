@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar'
 import ProjectDetail from './screens/ProjectDetail'
 import EditorScreen from './screens/EditorScreen'
 import BasePathSetup from './screens/BasePathSetup'
+import Onboarding, { hasCompletedOnboarding } from './components/Onboarding'
 
 const LoadingContainer = styled.div`
   width: 100%;
@@ -113,6 +114,7 @@ export default function App() {
     const saved = localStorage.getItem('reframe.sidebarWidth')
     return saved ? parseInt(saved, 10) : 200
   })
+  const [showOnboarding, setShowOnboarding] = useState(() => !hasCompletedOnboarding())
 
   useEffect(() => {
     init()
@@ -140,6 +142,10 @@ export default function App() {
     return <BasePathSetup />
   }
 
+  if (showOnboarding) {
+    return <Onboarding onComplete={() => setShowOnboarding(false)} />
+  }
+
   if (route.view === 'editor' && editorProject) {
     return (
       <AppContainer>
@@ -150,7 +156,11 @@ export default function App() {
 
   return (
     <MainLayout>
-      <Sidebar width={sidebarWidth} onWidthChange={setSidebarWidth} />
+      <Sidebar
+        width={sidebarWidth}
+        onWidthChange={setSidebarWidth}
+        onShowOnboarding={() => setShowOnboarding(true)}
+      />
       <MainContent>
         {route.view === 'project' ? (
           <ProjectDetail projectId={route.projectId} />

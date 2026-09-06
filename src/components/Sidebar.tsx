@@ -86,6 +86,20 @@ const IconButton = styled.button`
   }
 `
 
+const HelpButton = styled(IconButton)`
+  width: auto;
+  padding: 0 0.5rem;
+  color: #f97316;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+
+  &:hover {
+    color: #fb923c;
+    background: rgba(249, 115, 22, 0.12);
+  }
+`
+
 const NewInputContainer = styled.div`
   padding: 0.5rem;
   border-bottom: 1px solid rgba(42, 42, 42, 0.5);
@@ -199,7 +213,11 @@ const ContextItem = styled.button`
   }
 `
 
-export default function Sidebar({ width, onWidthChange }: { width: number; onWidthChange: (width: number) => void }) {
+export default function Sidebar({ width, onWidthChange, onShowOnboarding }: {
+  width: number
+  onWidthChange: (width: number) => void
+  onShowOnboarding: () => void
+}) {
   const projects = useAppStore((s) => s.projects)
   const route = useAppStore((s) => s.route)
   const navigate = useAppStore((s) => s.navigate)
@@ -257,7 +275,16 @@ export default function Sidebar({ width, onWidthChange }: { width: number; onWid
   return (
     <Wrapper $width={width}>
       <Header style={{ WebkitAppRegion: 'drag' } as any}>
-        <div style={{ width: 52 }} />
+        <div style={{ width: 52, flexShrink: 0 }} />
+        <HelpButton
+          onClick={onShowOnboarding}
+          style={{ WebkitAppRegion: 'no-drag' } as any}
+          title="Show how Reframe works"
+          aria-label="Show how Reframe works"
+          data-testid="show-onboarding-button"
+        >
+          GUIDE
+        </HelpButton>
         <Spacer />
         <IconButton onClick={() => setShowNew(true)} style={{ WebkitAppRegion: 'no-drag' } as any} title="New project" data-testid="new-project-button">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

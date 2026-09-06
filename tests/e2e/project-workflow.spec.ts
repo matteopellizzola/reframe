@@ -11,6 +11,8 @@ test.describe('Reframe App - Project Workflow', () => {
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
+    await page.click('[data-testid="onboarding-skip-button"]');
+
     await page.waitForSelector('[data-testid="new-project-button"]', { timeout: 10000 });
     
     await page.click('[data-testid="new-project-button"]');
@@ -35,8 +37,34 @@ test.describe('Reframe App - Project Workflow', () => {
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
+    await page.click('[data-testid="onboarding-skip-button"]');
+
     await expect(page.locator('text=Welcome to Reframe')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('text=Select a project from the sidebar or create a new one to get started.')).toBeVisible();
+
+    await closeElectronApp(app);
+  });
+
+  test('should show onboarding once and allow it to be reopened', async () => {
+    const seed = { basePath: '/tmp/reframe-test', projects: [], videos: [] };
+    const { app, page } = await launchElectronApp(seed);
+
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForLoadState('domcontentloaded');
+
+    await expect(page.locator('[data-testid="onboarding"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('text=Create a project')).toBeVisible();
+    await page.click('[data-testid="onboarding-skip-button"]');
+    await expect(page.locator('[data-testid="onboarding"]')).not.toBeVisible();
+
+    await page.click('[data-testid="show-onboarding-button"]');
+    await expect(page.locator('[data-testid="onboarding"]')).toBeVisible();
+    await page.click('[data-testid="onboarding-next-button"]');
+    await expect(page.locator('text=Import and reframe')).toBeVisible();
+    await page.click('[data-testid="onboarding-next-button"]');
+    await expect(page.locator('text=Create scenes and export')).toBeVisible();
+    await expect(page.locator('text=Press S to create a scene')).toBeVisible();
 
     await closeElectronApp(app);
   });
