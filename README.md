@@ -137,6 +137,14 @@ dist/Reframe-1.0.0-arm64.dmg  # For Apple Silicon
 dist/Reframe-1.0.0-x64.dmg    # For Intel Macs
 ```
 
+### Installing a private build
+
+For development builds shared privately (without Apple notarization), open the
+DMG and drag **Reframe** to **Applications**. If macOS blocks the first launch,
+double-click **Fix Reframe.command** in the DMG. It opens Terminal, removes only
+the download-quarantine flag from `/Applications/Reframe.app`, then opens the
+app. macOS may ask you to confirm opening the helper the first time.
+
 ## Usage
 
 ### Basic workflow

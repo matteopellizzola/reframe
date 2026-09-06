@@ -64,6 +64,26 @@
           ]
         }
       ]
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 100,
+          "y": 190
+        },
+        {
+          "x": 440,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 270,
+          "y": 300,
+          "type": "file",
+          "path": "build/Fix Reframe.command"
+        }
+      ]
     }
   }
 }
