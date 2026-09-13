@@ -149,6 +149,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const id = uuidv4()
     const video: VideoEntry = {
       ...videoData,
+      // Every newly imported video starts with an exportable slice spanning
+      // its full trim range. The user can still resize, hide, or delete it.
+      slices: videoData.slices.length > 0
+        ? videoData.slices
+        : [{ id: uuidv4(), start: videoData.trim.start, end: videoData.trim.end, status: 'keep' }],
       id,
       projectId,
       addedAt: Date.now(),

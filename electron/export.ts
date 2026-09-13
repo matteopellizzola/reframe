@@ -43,6 +43,16 @@ function getSourceFps(videoPath: string, fallback: number): Promise<number> {
   })
 }
 
+function sourceHasAudio(videoPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile(
+      executablePath(ffprobe.path),
+      ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=index', '-of', 'csv=p=0', videoPath],
+      (error, stdout) => resolve(!error && Boolean(stdout.trim()))
+    )
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Export Job Tracking for Cancellation
 // ---------------------------------------------------------------------------
@@ -278,8 +288,8 @@ function muxFramesWithAudio(
   segmentStart: number,
   duration: number,
   fps: number,
-  frameCount: number,
   abortSignal: AbortSignal,
+  hasAudio: boolean,
   stabilization?: { enabled: boolean; smoothing?: number; transformsFile?: string }
 ): { command: ffmpeg.FfmpegCommand; promise: Promise<void> } {
   const smoothing = stabilization?.smoothing ?? 10
@@ -293,13 +303,8 @@ function muxFramesWithAudio(
     .input(`${frameDir}/frame_%06d.jpg`)
     .inputOptions(['-framerate', String(fps)])
     .input(sourceVideoPath)
-    .inputOptions([
-      '-ss', String(segmentStart),
-      '-t', String(duration),
-    ])
     .outputOptions([
       '-map', '0:v',
-      '-map', '1:a?',
       '-c:v', 'libx264',
       '-preset', 'veryfast',
       '-crf', '15',
@@ -309,11 +314,25 @@ function muxFramesWithAudio(
       // frame. Do not apply a second output `-r`: FFmpeg may otherwise
       // duplicate/drop frames while resynchronizing to the audio stream.
       '-vsync', '0',
-      '-frames:v', String(frameCount),
-      '-c:a', 'aac',
-      '-b:a', '256k',
+      // The image sequence has exactly `frameCount` files and therefore ends
+      // naturally. Do not use `-frames:v`: FFmpeg stops the entire mux as
+      // soon as that video count is reached, leaving queued audio packets
+      // (often the final seconds) unencoded.
+      ...(hasAudio
+        ? [
+            // Trim the audio after decoding instead of seeking its input.
+            // This keeps its packet timestamps independent from the image
+            // sequence and prevents the final portion being discarded.
+            '-filter_complex', `[1:a:0]atrim=start=${segmentStart}:duration=${duration},asetpts=PTS-STARTPTS[audio]`,
+            '-map', '[audio]',
+            '-c:a', 'aac',
+            '-b:a', '256k',
+          ]
+        : []),
+      // The requested clip range, rather than whichever stream happens to
+      // finish first, defines the output duration.
+      '-t', String(duration),
       '-movflags', '+faststart',
-      '-shortest',
     ])
     .output(outputPath)
 
@@ -417,7 +436,8 @@ async function runPipeline(
   jobs: SliceJob[],
   project: Project,
   mainWindow: BrowserWindow,
-  fps: number
+  fps: number,
+  hasAudio: boolean
 ): Promise<void> {
   // Tracks in-flight mux promises so we can await them all at the end
   const muxPromises: Promise<void>[] = []
@@ -515,8 +535,8 @@ async function runPipeline(
         slice.start,
         duration,
         fps,
-        frameCount,
         abortSignal,
+        hasAudio,
         project.stabilization?.enabled
           ? {
               enabled: true,
@@ -632,7 +652,10 @@ export async function exportVideo(
   const exportSlices = slices && slices.length > 0 ? slices : undefined
 
   const results: { sliceId: string; path: string }[] = []
-  const fps = await getSourceFps(project.videoPath, project.videoFps || 30)
+  const [fps, hasAudio] = await Promise.all([
+    getSourceFps(project.videoPath, project.videoFps || 30),
+    sourceHasAudio(project.videoPath),
+  ])
 
   // Resolution label for filename e.g. "1214x2160"
   const resLabel = `${project.outputWidth}x${project.outputHeight}`
@@ -676,7 +699,7 @@ export async function exportVideo(
 
       const jobs: SliceJob[] = [job]
 
-      await runPipeline(jobs, project, mainWindow, fps)
+      await runPipeline(jobs, project, mainWindow, fps, hasAudio)
 
       results.push({ sliceId: slice.id, path: job.outputPath })
       mainWindow.webContents.send('export:done', { paths: [job.outputPath], results })
@@ -692,7 +715,7 @@ export async function exportVideo(
       })
     )
 
-    await runPipeline(jobs, project, mainWindow, fps)
+    await runPipeline(jobs, project, mainWindow, fps, hasAudio)
 
     jobs.forEach((job) => {
       results.push({ sliceId: job.slice.id, path: job.outputPath })

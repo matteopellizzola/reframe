@@ -95,8 +95,14 @@ async function handleCapture(payload: any) {
         video.addEventListener('seeked', onSeeked)
       })
 
-      // Use actual decoded frame time for crop calculation so crop matches visual content
-      const frameTime = video.currentTime
+      // Yield one compositor turn after the seek. Unlike
+      // requestVideoFrameCallback, this also resolves for paused videos; the
+      // latter can otherwise add seconds to every captured frame.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+      // Keep the crop on the export's fixed timeline, so decoder rounding
+      // cannot distort the pan/zoom curve or skip an animation frame.
+      const frameTime = targetTime
 
       const interp = interpolateAtTime(keyframes as Keyframe[], frameTime)
       const { cropW, cropH, cropX, cropY } = preserveSourceFrame
@@ -109,7 +115,7 @@ async function handleCapture(payload: any) {
       // Send bitmap + crop params to worker for draw + JPEG encode
       const encodedPromise = waitForEncoded()
       worker.postMessage(
-        { type: 'frame', index: i, bitmap, cropX, cropY, cropW, cropH, time: frameTime, subtitles: subtitles as Subtitles | undefined, preserveSourceFrame, sourceRotation },
+        { type: 'frame', index: i, bitmap, cropX, cropY, cropW, cropH, time: video.currentTime, subtitles: subtitles as Subtitles | undefined, preserveSourceFrame, sourceRotation },
         [bitmap]
       )
 

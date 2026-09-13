@@ -252,6 +252,9 @@ describe('appStore', () => {
       expect(state.videos[0].projectId).toBe(projectId)
       expect(state.videos[0].videoPath).toBe('/test/video.mp4')
       expect(state.videos[0].addedAt).toBeGreaterThan(0)
+      expect(state.videos[0].slices).toMatchObject([
+        { start: 0, end: 30, status: 'keep' },
+      ])
       expect(window.electron.saveAppData).toHaveBeenCalled()
     })
 

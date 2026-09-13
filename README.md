@@ -151,8 +151,9 @@ app. macOS may ask you to confirm opening the helper the first time.
 
 1. **Import video** — Click "Import Video" or drag and drop a landscape video
 2. **Add keyframes** — Press `K` to add keyframes at different timestamps
-3. **Adjust framing** — Pan and zoom the preview to frame your subject
-4. **Preview** — Use the playhead to scrub through and preview your edits
+3. **Create slices** — Press `S` to create a slice at the playhead. You can create multiple slices and export them together.
+4. **Adjust framing** — Pan and zoom the preview to frame your subject
+5. **Preview** — Use the playhead to scrub through and preview your edits
 
 ## Tech Stack
 

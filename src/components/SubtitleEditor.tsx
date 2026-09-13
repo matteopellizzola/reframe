@@ -22,6 +22,7 @@ const ProgressTrack = styled.div`height:5px; overflow:hidden; border-radius:999p
 const ProgressFill = styled.div<{ $value?: number }>`height:100%; width:${p => p.$value == null ? '35%' : `${p.$value}%`}; background:#f97316; border-radius:inherit; transition:width .2s; ${p => p.$value == null ? 'animation: whisper-pulse 1.2s ease-in-out infinite;' : ''} @keyframes whisper-pulse { 0%,100% { transform:translateX(-70%); } 50% { transform:translateX(190%); } }`
 
 function fmt(value: number) { return value.toFixed(2) }
+function clampPosition(value: number) { return Math.max(6, Math.min(94, value)) }
 
 function formatMegabytes(bytes?: number) {
   return bytes == null ? '' : `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -81,6 +82,11 @@ export default function SubtitleEditor({ onClose }: { onClose: () => void }) {
     const y = value === 'top' ? 18 : value === 'center' ? 50 : value === 'bottom' ? 82 : style.y
     updateStyle({ position: value, y })
   }
+  const updateCustomPosition = (axis: 'x' | 'y', value: string) => {
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed)) return
+    updateStyle({ [axis]: clampPosition(parsed), position: 'custom' })
+  }
   const capitalizeAll = () => {
     if (!subtitles) return
     setSubtitles({ ...subtitles, cues: subtitles.cues.map(cue => ({
@@ -117,12 +123,17 @@ export default function SubtitleEditor({ onClose }: { onClose: () => void }) {
       {style && <Row>
         <Label>Parole per blocco<input type="number" min="1" max="12" value={wordsPerBlock} onChange={e => setWordsPerBlock(Math.max(1, Math.min(12, +e.target.value || 1)))} onBlur={() => subtitles && setSubtitles({ ...subtitles, cues: regroupCues(subtitles.cues, wordsPerBlock) })} /></Label>
         <Label>Posizione<select value={style.position} onChange={e => position(e.target.value as SubtitleStyle['position'])}><option value="top">In alto</option><option value="center">Al centro</option><option value="bottom">In basso</option><option value="custom">Personalizzata</option></select></Label>
+        {style.position === 'custom' && <>
+          <Label>Orizzontale (%)<Input type="number" min="6" max="94" step="1" value={Math.round(style.x)} onChange={e => updateCustomPosition('x', e.target.value)} /></Label>
+          <Label>Verticale (%)<Input type="number" min="6" max="94" step="1" value={Math.round(style.y)} onChange={e => updateCustomPosition('y', e.target.value)} /></Label>
+        </>}
         <Label>Dimensione<input type="range" min="3" max="10" step=".5" value={style.fontSize} onChange={e => updateStyle({ fontSize:+e.target.value })} /></Label>
         <Label>Font<select value={style.fontFamily || 'Arial'} onChange={e => updateStyle({ fontFamily:e.target.value })}>{fontOptions.map(font => <option key={font} value={font}>{font}</option>)}</select></Label>
         <Label>Colore<input type="color" value={style.color} onChange={e => updateStyle({ color:e.target.value })} /></Label>
         <Label>Ombra<input type="color" value={style.shadowColor || '#000000'} onChange={e => updateStyle({ shadowColor:e.target.value })} /></Label>
         <Label>Sfondo<select value={style.background} onChange={e => updateStyle({ background:e.target.value as 'none'|'box' })}><option value="box">Riquadro</option><option value="none">Nessuno</option></select></Label>
       </Row>}
+      {style?.position === 'custom' && <div style={{ fontSize:11, color:'#9ca3af' }}>Imposta qui le coordinate oppure chiudi questa finestra e trascina il sottotitolo direttamente nell’anteprima.</div>}
       {subtitles && <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
         <div style={{ fontSize:11, color:'#9ca3af' }}>{subtitles.cues.length} blocchi — trascinali nella timeline per spostarli o ridimensionarli. Un ritorno a capo divide il blocco.</div>
         {subtitles.cues.map(cue => <Cue key={cue.id}>

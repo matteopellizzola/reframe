@@ -16,8 +16,8 @@ const steps = [
   },
   {
     eyebrow: 'Step 3 of 3',
-    title: 'Create scenes and export',
-    description: 'Press S to create a scene and define the part of the source video for your output. You can create multiple scenes from the same video, then add subtitles if needed and export the finished result.',
+    title: 'Create slices and export',
+    description: 'Press S to create a slice and define the part of the source video for your output. You can create more than one slice from the same video, then export all of them at the same time.',
   },
 ]
 
