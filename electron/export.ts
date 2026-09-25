@@ -7,7 +7,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { randomUUID } from 'crypto'
 import { execFile } from 'child_process'
-import { formatTimeForFilename } from './formatTime'
+import { getSliceOutputPath } from './exportFilename'
 import { executablePath } from './binaries'
 // @ts-ignore
 import ffprobe from 'ffprobe-static'
@@ -645,7 +645,7 @@ export async function exportVideo(
     videoId?: string
     jobId?: string
   },
-  outputDir: string,
+  outputFilePath: string,
   mainWindow: BrowserWindow
 ): Promise<string[]> {
   const { project, slices, jobId: exportJobId } = args
@@ -657,21 +657,10 @@ export async function exportVideo(
     sourceHasAudio(project.videoPath),
   ])
 
-  // Resolution label for filename e.g. "1214x2160"
-  const resLabel = `${project.outputWidth}x${project.outputHeight}`
-
   // Create a job for each slice with its own abort controller
   const createJob = (slice: Slice, index: number, tempDir: string): SliceJob => {
-    const baseName = outputDir.replace(/\.[^.]+$/, '')
-    const ext = outputDir.match(/(\.[ ^.]+)$/)?.[1] ?? '.mp4'
     const total = exportSlices?.length || 1
-    
-    // Generate timestamp-based filename
-    const startTime = formatTimeForFilename(slice.start)
-    const endTime = formatTimeForFilename(slice.end)
-    const timestampLabel = `${startTime}-to-${endTime}`
-    
-    const outputPath = `${baseName}_${timestampLabel}_${resLabel}${ext}`
+    const outputPath = getSliceOutputPath(outputFilePath, index, total)
 
     return {
       slice,

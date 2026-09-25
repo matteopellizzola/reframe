@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { execFile } from 'child_process'
 import { exportVideo, cancelExport, cancelExportBySliceId } from './export'
+import { getExportOutputPaths, normalizeExportPath } from './exportFilename'
 import { randomUUID } from 'crypto'
 import os from 'os'
 // @ts-ignore
@@ -228,15 +229,18 @@ ipcMain.handle('transcribe-video', async (event, filePath: string) => {
 
 ipcMain.handle('export-video', async (_event, args) => {
   if (!mainWindow) return null
-  const { basePath, videoId } = args
-  // Destination is intentionally requested for every export. The project root
-  // remains a convenient starting location, but never decides the result.
-  const destination = await dialog.showOpenDialog(mainWindow, {
-    title: 'Scegli la cartella di destinazione',
-    defaultPath: basePath || undefined,
-    properties: ['openDirectory', 'createDirectory'],
+  const { basePath, projectName, slices } = args
+  const safeProjectName = String(projectName || 'reframe-export')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .trim() || 'reframe-export'
+  // The save dialog lets the user choose both the destination and the name.
+  // A batch treats that name as its base and adds _001, _002, ... below.
+  const destination = await dialog.showSaveDialog(mainWindow, {
+    title: 'Scegli nome e destinazione dell’esportazione',
+    defaultPath: path.join(basePath || app.getPath('downloads'), `${safeProjectName}.mp4`),
+    filters: [{ name: 'Video MP4', extensions: ['mp4'] }],
   })
-  if (destination.canceled || destination.filePaths.length === 0) return null
+  if (destination.canceled || !destination.filePath) return null
   try {
     // Re-probe subtitle-only exports so projects created before rotation support
     // also preserve the displayed (rather than encoded) phone-video orientation.
@@ -257,19 +261,23 @@ ipcMain.handle('export-video', async (_event, args) => {
         },
       }
     }
-    await fs.promises.mkdir(destination.filePaths[0], { recursive: true })
-    const safeVideoId = String(videoId || 'reframe-export').replace(/[^a-zA-Z0-9-_]/g, '-')
-    // A unique base prevents a new export from deleting or overwriting files
-    // already present in a user-selected folder.
-    const existingNames = new Set(await fs.promises.readdir(destination.filePaths[0]))
+    const selectedPath = normalizeExportPath(destination.filePath)
+    const selectedDirectory = path.dirname(selectedPath)
+    await fs.promises.mkdir(selectedDirectory, { recursive: true })
+
+    // The save dialog can only warn about the exact selected filename. For a
+    // multi-slice export we also guard the generated _001, _002, ... names.
+    const total = Array.isArray(slices) && slices.length > 0 ? slices.length : 1
     let suffix = 0
-    let baseName = safeVideoId
-    while ([...existingNames].some((name) => name === `${baseName}.mp4` || name.startsWith(`${baseName}_`))) {
+    let outputFilePath = selectedPath
+    while ((await Promise.all(getExportOutputPaths(outputFilePath, total).map((filePath) =>
+      fs.promises.access(filePath).then(() => true).catch(() => false)
+    ))).some(Boolean)) {
       suffix += 1
-      baseName = `${safeVideoId}-${suffix}`
+      const parsed = path.parse(selectedPath)
+      outputFilePath = path.join(parsed.dir, `${parsed.name}-${suffix}${parsed.ext}`)
     }
-    const baseFileName = path.join(destination.filePaths[0], baseName)
-    const paths = await exportVideo(args, `${baseFileName}.mp4`, mainWindow)
+    const paths = await exportVideo(args, outputFilePath, mainWindow)
     return paths.join(', ')
   } catch (err: any) {
     throw new Error(err.message || 'Export failed')

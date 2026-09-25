@@ -138,7 +138,7 @@ export function ExportProvider({ children }: { children: ReactNode }) {
     cleanupFnsRef.current.push(cleanupDone)
 
     try {
-      await window.electron.exportVideo({
+      const result = await window.electron.exportVideo({
         project,
         slices,
         basePath,
@@ -146,6 +146,9 @@ export function ExportProvider({ children }: { children: ReactNode }) {
         videoId,
         jobId: exportJobId,
       })
+      // The native save dialog was dismissed: no export was started, so do not
+      // leave an in-progress modal on screen.
+      if (result === null) setShowExportModal(false)
     } catch (err: any) {
       setExportError(err.message || 'Export failed')
     } finally {
