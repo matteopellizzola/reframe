@@ -31,3 +31,13 @@ Invoke-WebRequest 'https://raw.githubusercontent.com/openai/whisper/main/LICENSE
 New-Item -ItemType Directory -Force "$Root/.windows-smoke" | Out-Null
 Copy-Item "$Source/samples/jfk.wav" "$Root/.windows-smoke/jfk.wav"
 Run-Native "$Destination/whisper-cli.exe" @('--help')
+# A hosted runner has VC runtimes installed: inspect imports so it cannot hide
+# a dependency that would fail on a recipient's clean computer.
+$VS = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' -property installationPath
+$Dumpbin = (Get-ChildItem "$VS/VC/Tools/MSVC/*/bin/Hostx64/x64/dumpbin.exe" | Select-Object -Last 1).FullName
+$Imports = & $Dumpbin /DEPENDENTS "$Destination/whisper-cli.exe"
+if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect Whisper DLL dependencies' }
+$Imports | Set-Content "$Destination/dependencies.txt"
+if ($Imports -match '(?i)(VCRUNTIME|MSVCP|VCOMP|LIBOMP|GGML|WHISPER).*\.dll') {
+  throw 'Whisper unexpectedly requires a non-system runtime DLL'
+}
