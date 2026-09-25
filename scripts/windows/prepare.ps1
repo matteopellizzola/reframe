@@ -17,6 +17,11 @@ Run-Native cmake @('-S', $Source, '-B', "$Source/build", '-A', 'x64',
   '-DWHISPER_BUILD_TESTS=OFF', '-DWHISPER_BUILD_SERVER=OFF')
 Run-Native cmake @('--build', "$Source/build", '--config', 'Release', '--target', 'whisper-cli', '--parallel', '4')
 Copy-Item "$Source/build/bin/Release/whisper-cli.exe" $Destination
+# whisper's MSVC model loader expects UTF-8, but main(argc, argv) otherwise uses
+# the legacy Windows code page. Embed a process-local UTF-8 manifest to align
+# argv, std::ifstream and the model loader (Windows 10 1903+).
+$ManifestTool = (Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/mt.exe" | Sort-Object FullName | Select-Object -Last 1).FullName
+Run-Native $ManifestTool @('-nologo', '-manifest', "$PSScriptRoot/whisper.manifest", "-outputresource:$Destination/whisper-cli.exe;#1")
 Copy-Item "$Source/LICENSE" "$Destination/whisper-LICENSE.txt"
 # Resolve a model revision once and verify the downloaded LFS content by SHA-256.
 $Metadata = Invoke-RestMethod 'https://huggingface.co/api/models/ggerganov/whisper.cpp/revision/main?blobs=true'

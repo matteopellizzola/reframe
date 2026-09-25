@@ -19,7 +19,7 @@ artifact from a successful run and extract the installer. Install it and launch
 Reframe normally. No Node.js, Python, FFmpeg installation, administrator rights,
 or first-use model download is required on the recipient's computer.
 
-Target: Windows 10/11 x64 (Intel/AMD). Native ARM64 is not included. The installer
+Target: Windows 10 (1903 or newer) / 11 x64 (Intel/AMD). Native ARM64 is not included. The installer
 includes the multilingual Whisper small model (roughly 466 MB), FFmpeg and
 FFprobe. Transcription uses the CPU and works offline, including on first use;
 long recordings can take time. Allow roughly 2 GB of free disk space for installation,
@@ -35,6 +35,7 @@ in GitHub Actions. The hosted Windows runner:
 1. Runs unit tests and TypeScript checks.
 2. Compiles [whisper.cpp v1.8.3](https://github.com/ggml-org/whisper.cpp/tree/v1.8.3)
    with a static Microsoft runtime, no GPU/OpenMP dependency and conservative CPU settings.
+   Its embedded UTF-8 manifest supports accented installation paths without changing system settings.
 3. Downloads the multilingual model at a resolved revision and verifies its SHA-256.
 4. Builds and silently installs the actual NSIS package to a path containing spaces,
    Unicode and `#`.

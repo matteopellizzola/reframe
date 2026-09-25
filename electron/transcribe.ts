@@ -15,15 +15,15 @@ export async function transcribeVideo(filePath: string, ffmpegPath: string, repo
     await new Promise<void>((resolve, reject) => {
       execFile(ffmpegPath, ['-y', '-i', filePath, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath], {
         windowsHide: true, timeout: 10 * 60 * 1000, maxBuffer: 10 * 1024 * 1024,
-      }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve())
+      }, (error, _stdout, stderr) => error ? reject(new Error(`${stderr || error.message} (code: ${error.code ?? 'unknown'}, signal: ${error.signal ?? 'none'})`)) : resolve())
     })
     await new Promise<void>((resolve, reject) => {
       // Metal is unstable with the current Homebrew runtime on some Apple Silicon
       // configurations. CPU/Accelerate is reliable and still fully local.
-      execFile(cliPath, ['--model', modelPath, '--file', wavPath, '--output-json', '--output-file', outputBase, '--language', 'auto', '--no-prints', '--no-gpu'], {
+      execFile(cliPath, ['--model', modelPath, '--file', wavPath, '--output-json', '--output-file', outputBase, '--language', 'auto', '--no-gpu'], {
         windowsHide: true, timeout: 60 * 60 * 1000,
         maxBuffer: 10 * 1024 * 1024,
-      }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve())
+      }, (error, _stdout, stderr) => error ? reject(new Error(`${stderr || error.message} (code: ${error.code ?? 'unknown'}, signal: ${error.signal ?? 'none'})`)) : resolve())
     })
     const jsonPath = `${outputBase}.json`
     const raw = JSON.parse(await fs.promises.readFile(jsonPath, 'utf8'))
