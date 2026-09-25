@@ -15,7 +15,7 @@ test('installed first launch: video, persistence and real offline Whisper', asyn
   try {
     // Block main-process HTTPS too: a bundled runtime must work without downloads.
     await app.evaluate(() => {
-      const https = require('https')
+      const https = process.getBuiltinModule('https')
       https.get = () => { throw new Error('Network forbidden in offline first-launch test') }
     })
     const page = await app.firstWindow()
