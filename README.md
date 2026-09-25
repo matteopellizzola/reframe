@@ -21,7 +21,8 @@ or first-use model download is required on the recipient's computer.
 
 Target: Windows 10 (1903 or newer) / 11 x64 (Intel/AMD). Native ARM64 is not included. The installer
 includes the multilingual Whisper small model (roughly 466 MB), FFmpeg and
-FFprobe. Transcription uses the CPU and works offline, including on first use;
+FFprobe. Transcription automatically selects an AVX2 CPU build when supported and falls back
+to a compatible baseline on older CPUs. It works offline, including on first use;
 long recordings can take time. Allow roughly 2 GB of free disk space for installation,
 plus space for source videos and export frames. The prototype is unsigned, so
 Windows SmartScreen may warn about the unknown publisher. A signed public release

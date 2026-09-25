@@ -1,3 +1,4 @@
+import { fileUrl } from '../../src/utils/fileUrl'
 import { test, expect, _electron as electron } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
@@ -6,6 +7,9 @@ import path from 'node:path'
 test('installed first launch: video, persistence and real offline Whisper', async () => {
   const executablePath = process.env.REFRAME_WINDOWS_EXE
   if (!executablePath) throw new Error('REFRAME_WINDOWS_EXE must point to the installed app')
+  const cpu = execFileSync(path.join(path.dirname(executablePath), 'resources/whisper/whisper-cpu.exe'), { encoding: 'utf8', windowsHide: true }).trim()
+  expect(['baseline', 'avx2']).toContain(cpu)
+  console.log(`Whisper CPU runtime: ${cpu}`)
   const fixtureDir = path.resolve('.windows-smoke', 'video à # 100%')
   mkdirSync(fixtureDir, { recursive: true })
   const videoPath = path.join(fixtureDir, 'speech #1.mp4')
@@ -24,7 +28,9 @@ test('installed first launch: video, persistence and real offline Whisper', asyn
     const metadata = await page.evaluate(p => window.electron.getVideoMetadata(p), videoPath)
     expect(metadata.width).toBe(320)
     expect(metadata.duration).toBeGreaterThan(5)
+    console.log('Installed app started; video metadata verified')
     const cues = await page.evaluate(async p => (await window.electron.transcribeVideo(p)).cues, videoPath)
+    console.log('Offline transcription completed')
     expect(cues.length).toBeGreaterThan(0)
     expect(cues.map(c => c.text).join(' ').toLowerCase()).toContain('country')
     expect(cues.every(c => Number.isFinite(c.start) && c.end > c.start)).toBe(true)
@@ -32,15 +38,16 @@ test('installed first launch: video, persistence and real offline Whisper', asyn
     await page.evaluate(d => window.electron.saveAppData(d), data)
     expect(await page.evaluate(() => window.electron.loadAppData())).toEqual(data)
     // Real Chromium file decoding with Windows escaping, not a mocked video element.
-    const fileUrl = (await import('../../src/utils/fileUrl')).fileUrl(videoPath)
+    const sourceUrl = fileUrl(videoPath)
     const dimensions = await page.evaluate(url => new Promise<number>((resolve, reject) => {
       const video = document.createElement('video')
       video.onloadeddata = () => resolve(video.videoWidth)
       video.onerror = () => reject(new Error('Video decoding failed'))
       video.src = url
       video.load()
-    }), fileUrl)
+    }), sourceUrl)
     expect(dimensions).toBe(320)
+    console.log('Persistence and video decoding verified')
     const outputPath = path.join(fixtureDir, 'export à #1.mp4')
     await app.evaluate(({ dialog }, destination) => {
       dialog.showSaveDialog = async () => ({ canceled: false, filePath: destination })
@@ -54,6 +61,7 @@ test('installed first launch: video, persistence and real offline Whisper', asyn
           shadowColor: '#000000', fontFamily: 'Arial', background: 'box', position: 'bottom' } },
       },
     }), { videoPath, cues, fixtureDir })
+    console.log('Subtitled export completed')
     expect(exported).toBe(outputPath)
     const exportedMeta = await page.evaluate(p => window.electron.getVideoMetadata(p), outputPath)
     expect(exportedMeta.width).toBe(320)

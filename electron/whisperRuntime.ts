@@ -100,6 +100,11 @@ async function installRuntime(reportStatus: StatusReporter = () => {}): Promise<
   if (process.platform === 'win32') {
     reportStatus({ phase: 'checking' })
     const runtime = await bundledWindowsRuntime(process.resourcesPath, process.arch)
+    // Unknown or failed CPU probes always retain the compatible baseline.
+    const probe = await execFileAsync(path.join(process.resourcesPath, 'whisper', 'whisper-cpu.exe'), [], {
+      windowsHide: true, timeout: 10_000,
+    }).then(result => result.stdout.trim()).catch(() => 'baseline')
+    runtime.cliPath = windowsWhisperCli(path.join(process.resourcesPath, 'whisper'), probe)
     reportStatus({ phase: 'ready' })
     return runtime
   }
@@ -156,12 +161,16 @@ export function ensureWhisperRuntime(reportStatus?: StatusReporter) {
 export async function bundledWindowsRuntime(resourcesPath: string, arch: string) {
   if (arch !== 'x64') throw new Error('Questa versione di Whisper richiede Windows a 64 bit (x64).')
   const dir = path.join(resourcesPath, 'whisper')
-  const runtime = { cliPath: path.join(dir, 'whisper-cli.exe'), modelPath: path.join(dir, MODEL_NAME) }
-  for (const file of Object.values(runtime)) {
+  const runtime = { cliPath: path.join(dir, 'whisper-cli-baseline.exe'), modelPath: path.join(dir, MODEL_NAME) }
+  for (const file of [...Object.values(runtime), path.join(dir, 'whisper-cli.exe'), path.join(dir, 'whisper-cpu.exe')]) {
     const stat = await fs.stat(file).catch(() => null)
     if (!stat?.isFile() || stat.size === 0) {
       throw new Error('Installazione Whisper incompleta. Reinstalla Reframe con il pacchetto Windows completo.')
     }
   }
   return runtime
+}
+
+export function windowsWhisperCli(dir: string, cpu: string): string {
+  return path.join(dir, cpu === 'avx2' ? 'whisper-cli.exe' : 'whisper-cli-baseline.exe')
 }

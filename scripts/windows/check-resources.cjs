@@ -4,7 +4,7 @@ const path = require('node:path')
 module.exports = async function beforePack(context) {
   if (context.electronPlatformName !== 'win32') return
   const dir = path.join(context.packager.projectDir, 'build/windows/whisper')
-  for (const name of ['whisper-cli.exe', 'ggml-small.bin', 'manifest.json', 'whisper-LICENSE.txt', 'model-LICENSE.txt']) {
+  for (const name of ['whisper-cli.exe', 'whisper-cli-baseline.exe', 'whisper-cpu.exe', 'ggml-small.bin', 'manifest.json', 'whisper-LICENSE.txt', 'model-LICENSE.txt']) {
     if (!statSync(path.join(dir, name)).size) throw new Error(`Empty Windows resource: ${name}`)
   }
   const manifest = JSON.parse(readFileSync(path.join(dir, 'manifest.json'), 'utf8').replace(/^\uFEFF/, ''))
