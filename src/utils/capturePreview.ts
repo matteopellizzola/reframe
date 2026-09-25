@@ -1,3 +1,4 @@
+import { fileUrl } from './fileUrl'
 import { interpolateAtTime } from './interpolate'
 import { computeCrop } from './computeCrop'
 import type { Keyframe, Subtitles } from '../types'
@@ -32,7 +33,7 @@ async function handleCapture(payload: any) {
     } = payload
 
     const video = document.createElement('video')
-    video.src = `file://${videoPath}`
+    video.src = fileUrl(videoPath)
     video.crossOrigin = 'anonymous'
     video.muted = true
     video.playsInline = true

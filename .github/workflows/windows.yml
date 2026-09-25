@@ -1,0 +1,57 @@
+name: Windows prototype
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'codex/windows-*']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx tsc --noEmit
+      - name: Prepare standalone Whisper and verified multilingual model
+        shell: pwsh
+        run: ./scripts/windows/prepare.ps1
+      - name: Build installer
+        run: npm run package:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Install without administrator rights
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem dist/*-windows-x64-setup.exe | Select-Object -First 1).FullName
+          $destination = Join-Path $env:RUNNER_TEMP 'Reframe test à #1'
+          $process = Start-Process -FilePath $installer -ArgumentList @('/S', "/D=$destination") -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Installer failed: $($process.ExitCode)" }
+          if (!(Test-Path "$destination/Reframe.exe")) { throw 'Installed executable missing' }
+          "REFRAME_WINDOWS_EXE=$destination/Reframe.exe" >> $env:GITHUB_ENV
+      - name: Test installed app offline, including real transcription
+        run: npx playwright test --config playwright.windows.config.ts
+      - name: Upload tested installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Reframe-Windows-x64
+          path: |
+            dist/*-windows-x64-setup.exe
+            build/windows/whisper/manifest.json
+          if-no-files-found: error
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-test-results
+          path: |
+            test-results/
+            playwright-report/
+            dist/builder-debug.yml

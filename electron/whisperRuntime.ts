@@ -24,7 +24,7 @@ export type WhisperStatus = {
   totalBytes?: number
 }
 
-type StatusReporter = (status: WhisperStatus) => void
+export type StatusReporter = (status: WhisperStatus) => void
 
 let installation: Promise<{ cliPath: string; modelPath: string }> | null = null
 
@@ -97,6 +97,13 @@ async function download(url: string, destination: string, report?: (downloadedBy
 }
 
 async function installRuntime(reportStatus: StatusReporter = () => {}): Promise<{ cliPath: string; modelPath: string }> {
+  if (process.platform === 'win32') {
+    reportStatus({ phase: 'checking' })
+    const runtime = await bundledWindowsRuntime(process.resourcesPath, process.arch)
+    reportStatus({ phase: 'ready' })
+    return runtime
+  }
+  if (process.platform !== 'darwin') throw new Error('Trascrizione supportata su macOS e Windows x64.')
   const dir = runtimeDirectory()
   const executable = cliPath()
   const model = modelPath()
@@ -143,4 +150,18 @@ export function ensureWhisperRuntime(reportStatus?: StatusReporter) {
     throw error
   })
   return installation
+}
+
+/** Windows ships a static CPU runtime and multilingual model, ready offline. */
+export async function bundledWindowsRuntime(resourcesPath: string, arch: string) {
+  if (arch !== 'x64') throw new Error('Questa versione di Whisper richiede Windows a 64 bit (x64).')
+  const dir = path.join(resourcesPath, 'whisper')
+  const runtime = { cliPath: path.join(dir, 'whisper-cli.exe'), modelPath: path.join(dir, MODEL_NAME) }
+  for (const file of Object.values(runtime)) {
+    const stat = await fs.stat(file).catch(() => null)
+    if (!stat?.isFile() || stat.size === 0) {
+      throw new Error('Installazione Whisper incompleta. Reinstalla Reframe con il pacchetto Windows completo.')
+    }
+  }
+  return runtime
 }

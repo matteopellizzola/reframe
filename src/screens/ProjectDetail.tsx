@@ -1,3 +1,4 @@
+import { fileUrl } from '../utils/fileUrl'
 import { useState, useCallback, useMemo, DragEvent, useRef, useEffect } from 'react'
 import styled from 'styled-components'
 import { v4 as uuidv4 } from 'uuid'
@@ -626,7 +627,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
         const outputRatio = editMode === 'subtitles' ? 'custom' as const : '9:16' as const
         const { outputWidth, outputHeight } = editMode === 'subtitles'
           ? { outputWidth: sourceWidth, outputHeight: sourceHeight }
-          : computeOutputDimensions(meta.width, meta.height, outputRatio)
+          : computeOutputDimensions(meta.width, meta.height, '9:16')
 
         const videoId = addVideo(projectId, {
           videoPath: filePath,
@@ -934,7 +935,7 @@ export default function ProjectDetail({ projectId }: { projectId: string }) {
                 <PreviewContainer onClick={togglePlay}>
                   <PreviewVideo
                     ref={videoRef}
-                    src={`file://${selectedVideo.videoPath}`}
+                    src={fileUrl(selectedVideo.videoPath)}
                     onEnded={() => setIsPlaying(false)}
                     onTimeUpdate={handleTimeUpdate}
                     onLoadedMetadata={handleLoadedMetadata}

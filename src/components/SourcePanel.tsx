@@ -1,3 +1,4 @@
+import { fileUrl } from '../utils/fileUrl'
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import styled from 'styled-components'
 import { useEditorStore } from '../store/editorStore'
@@ -516,7 +517,7 @@ export default function SourcePanel({
       <VideoEl
         ref={videoRef}
         id="source-video"
-        src={`file://${project.videoPath}`}
+        src={fileUrl(project.videoPath)}
         muted={!previewAudioEnabled}
         playsInline
         preload="auto"

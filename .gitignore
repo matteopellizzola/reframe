@@ -5,3 +5,7 @@ out/
 *.reframe
 .DS_Store
 todo.md
+
+# Generated Windows runtime and model
+build/windows/
+.windows-smoke/

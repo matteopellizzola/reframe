@@ -10,7 +10,7 @@ import os from 'os'
 import ffprobe from 'ffprobe-static'
 // @ts-ignore
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
-import { ensureWhisperRuntime } from './whisperRuntime'
+import { transcribeVideo } from './transcribe'
 import { executablePath } from './binaries'
 
 let mainWindow: BrowserWindow | null = null
@@ -93,7 +93,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     backgroundColor: '#0e0e0e',
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 16 },
     show: true, // 👈 always show — Xvfb provides the display in CI
     webPreferences: {
@@ -189,41 +189,11 @@ function getVideoMetadata(filePath: string): Promise<{ width: number; height: nu
 ipcMain.handle('get-video-metadata', async (_event, filePath: string) => getVideoMetadata(filePath))
 
 // Local whisper.cpp transcription. Video audio is converted to the 16 kHz mono
-// WAV input expected by whisper.cpp; no audio ever leaves the Mac.
+// WAV input expected by whisper.cpp; no audio ever leaves the computer.
 ipcMain.handle('transcribe-video', async (event, filePath: string) => {
-  const tempDir = path.join(os.tmpdir(), `reframe-whisper-${randomUUID()}`)
-  const wavPath = path.join(tempDir, 'audio.wav')
-  const outputBase = path.join(tempDir, 'transcript')
-  await fs.promises.mkdir(tempDir, { recursive: true })
-  try {
-    const { modelPath, cliPath } = await ensureWhisperRuntime((status) => event.sender.send('whisper:status', status))
-    await new Promise<void>((resolve, reject) => {
-      execFile(getFfmpegPath(), ['-y', '-i', filePath, '-vn', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wavPath], {
-        timeout: 10 * 60 * 1000, maxBuffer: 10 * 1024 * 1024,
-      }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve())
-    })
-    await new Promise<void>((resolve, reject) => {
-      // Metal is unstable with the current Homebrew runtime on some Apple Silicon
-      // configurations. CPU/Accelerate is reliable and still fully local.
-      execFile(cliPath, ['--model', modelPath, '--file', wavPath, '--output-json', '--output-file', outputBase, '--language', 'auto', '--no-prints', '--no-gpu'], {
-        timeout: 60 * 60 * 1000,
-        maxBuffer: 10 * 1024 * 1024,
-      }, (error, _stdout, stderr) => error ? reject(new Error(stderr || error.message)) : resolve())
-    })
-    const jsonPath = `${outputBase}.json`
-    const raw = JSON.parse(await fs.promises.readFile(jsonPath, 'utf8'))
-    const cues = (raw.transcription || raw.segments || []).map((segment: any) => ({
-      id: randomUUID(),
-      start: Number(segment.offsets?.from ?? segment.start ?? 0) / (segment.offsets ? 1000 : 1),
-      end: Number(segment.offsets?.to ?? segment.end ?? 0) / (segment.offsets ? 1000 : 1),
-      text: String(segment.text || '').trim(),
-    })).filter((cue: any) => cue.text && cue.end > cue.start)
-    return { cues }
-  } catch (error: any) {
-    throw new Error(error?.message || 'Trascrizione non riuscita.')
-  } finally {
-    await fs.promises.rm(tempDir, { recursive: true, force: true }).catch(() => {})
-  }
+  return transcribeVideo(filePath, getFfmpegPath(), (status) => {
+    if (!event.sender.isDestroyed()) event.sender.send('whisper:status', status)
+  })
 })
 
 

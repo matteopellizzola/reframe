@@ -1,3 +1,4 @@
+import { fileUrl } from '../utils/fileUrl'
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react'
 import { createPortal } from 'react-dom'
 import styled from 'styled-components'
@@ -546,7 +547,7 @@ export default function Timeline() {
   useEffect(() => {
     const video = thumbVideoRef.current
     if (!video || !project.videoPath) return
-    video.src = `file://${project.videoPath}`
+    video.src = fileUrl(project.videoPath)
     video.preload = 'auto'
   }, [project.videoPath])
 

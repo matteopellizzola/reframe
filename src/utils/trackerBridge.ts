@@ -1,3 +1,4 @@
+import { fileUrl } from './fileUrl'
 import type { TrackResult, UntrackedRange } from '../types'
 import type { BBox } from './simpleTracker'
 import TrackerWorker from './trackerWorker?worker'
@@ -121,7 +122,7 @@ export async function runTracker(options: TrackerBridgeOptions): Promise<() => v
 
     // Set up video element for frame extraction
     const video = document.createElement('video')
-    video.src = `file://${options.videoPath}`
+    video.src = fileUrl(options.videoPath)
     video.crossOrigin = 'anonymous'
     video.muted = true
     video.playsInline = true

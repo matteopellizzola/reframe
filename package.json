@@ -14,7 +14,8 @@
     "test:e2e": "npm run build && HEADLESS_E2E=1 playwright test",
     "test:e2e:show": "npm run build && playwright test",
     "test:e2e:ui": "npm run build && playwright test --ui",
-    "test:e2e:debug": "npm run build && playwright test --debug"
+    "test:e2e:debug": "npm run build && playwright test --debug",
+    "package:win": "npm run build && electron-builder --win nsis --x64"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -84,6 +85,37 @@
           "path": "build/Fix Reframe.command"
         }
       ]
-    }
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "Reframe-${version}-windows-${arch}-setup.${ext}",
+      "extraResources": [
+        {
+          "from": "build/windows/whisper",
+          "to": "whisper",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "beforePack": "scripts/windows/check-resources.cjs"
   }
 }
