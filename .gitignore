@@ -9,3 +9,4 @@ todo.md
 # Generated Windows runtime and model
 build/windows/
 .windows-smoke/
+playwright-report/
