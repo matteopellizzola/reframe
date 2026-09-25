@@ -11,7 +11,7 @@ New-Item -ItemType Directory -Force $Destination | Out-Null
 Run-Native git @('clone', '--depth', '1', '--branch', 'v1.8.3', 'https://github.com/ggml-org/whisper.cpp.git', $Source)
 # Static CRT, no external DLLs, no GPU or CPU instruction requirements beyond x64.
 Run-Native cmake @('-S', $Source, '-B', "$Source/build", '-A', 'x64',
-  '-DBUILD_SHARED_LIBS=OFF', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
+  '-DCMAKE_POLICY_DEFAULT_CMP0091=NEW', '-DBUILD_SHARED_LIBS=OFF', '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded',
   '-DGGML_NATIVE=OFF', '-DGGML_AVX=OFF', '-DGGML_AVX2=OFF', '-DGGML_BMI2=OFF', '-DGGML_SSE42=OFF',
   '-DGGML_OPENMP=OFF', '-DGGML_BLAS=OFF', '-DGGML_CUDA=OFF', '-DGGML_VULKAN=OFF',
   '-DWHISPER_BUILD_TESTS=OFF', '-DWHISPER_BUILD_SERVER=OFF')

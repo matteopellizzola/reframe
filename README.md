@@ -1,6 +1,6 @@
 # Reframe
 
-A macOS desktop app for converting landscape videos to portrait format using a keyframe-based pan/zoom editor. Perfect for repurposing content for social media platforms like Instagram Stories, TikTok, and YouTube Shorts.
+A desktop app for macOS and Windows (x64 prototype) for converting landscape videos to portrait format using a keyframe-based pan/zoom editor. Perfect for repurposing content for social media platforms like Instagram Stories, TikTok, and YouTube Shorts.
 
 [Watch Demo Video Here](https://youtu.be/fZkW333Fob0)
 
@@ -9,7 +9,48 @@ A macOS desktop app for converting landscape videos to portrait format using a k
 - 🎬 **Keyframe-based editing** — Precise control over pan and zoom animations
 - 🎯 **Visual preview** — Real-time preview of your portrait video
 - 📁 **Export destination** — Choose the destination folder every time you export
-- ✍️ **Local subtitles** — Whisper downloads its runtime and model on first use; Homebrew is not required
+- ✍️ **Local subtitles** — Whisper runs locally; Windows includes the runtime and model, while macOS downloads them on first use
+
+## Windows prototype
+
+The **Windows prototype** GitHub Actions workflow builds a per-user installer:
+`Reframe-1.0.0-windows-x64-setup.exe`. Download the **Reframe-Windows-x64**
+artifact from a successful run and extract the installer. Install it and launch
+Reframe normally. No Node.js, Python, FFmpeg installation, administrator rights,
+or first-use model download is required on the recipient's computer.
+
+Target: Windows 10/11 x64 (Intel/AMD). Native ARM64 is not included. The installer
+includes the multilingual Whisper small model (roughly 466 MB), FFmpeg and
+FFprobe. Transcription uses the CPU and works offline, including on first use;
+long recordings can take time. Allow roughly 2 GB of free disk space for installation,
+plus space for source videos and export frames. The prototype is unsigned, so
+Windows SmartScreen may warn about the unknown publisher. A signed public release
+is a separate distribution step.
+
+### Build and verification without a Windows computer
+
+Push to `codex/windows-*`, open a PR against `main`, or run **Windows prototype**
+in GitHub Actions. The hosted Windows runner:
+
+1. Runs unit tests and TypeScript checks.
+2. Compiles [whisper.cpp v1.8.3](https://github.com/ggml-org/whisper.cpp/tree/v1.8.3)
+   with a static Microsoft runtime, no GPU/OpenMP dependency and conservative CPU settings.
+3. Downloads the multilingual model at a resolved revision and verifies its SHA-256.
+4. Builds and silently installs the actual NSIS package to a path containing spaces,
+   Unicode and `#`.
+5. Launches that installed app, reads a real video, transcribes the upstream JFK
+   speech sample with network access blocked in the app, verifies timing and recognized
+   words, saves data, decodes video in Chromium and exports a subtitled clip.
+6. Uploads the installer only when all checks pass; diagnostics remain available on failure.
+
+The artifact includes a manifest with the exact Whisper commit and model revision/hash.
+The build fails if bundled files are missing or the model checksum differs. The tests
+use an ephemeral runner; nothing needs to be installed or virtualized on your Mac.
+Passing CI covers the tested workflow, not every physical Windows machine or graphics driver.
+
+Build files: `.github/workflows/windows.yml`, `scripts/windows/prepare.ps1`,
+`tests/windows/installed.spec.ts`. `npm run package:win` expects the resources generated
+by the preparation workflow; it deliberately fails if they are absent.
 
 ## Prerequisites
 
